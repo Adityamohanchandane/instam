@@ -5,7 +5,7 @@ import Onboarding from './components/Onboarding';
 import RecommendationView from './components/RecommendationView';
 import type { UserProfile } from './lib/types';
 
-const PROFILE_KEY = 'vibesync_profile';
+const PROFILE_KEY = 'instam_profile';
 
 export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
