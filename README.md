@@ -1,41 +1,53 @@
 # Instam - AI Music for Your Moments
 
-## React + TypeScript + Vite
+## 🎵 About
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Instam is an AI-powered music recommendation app that suggests perfect songs for your social media stories based on your image mood, personality, and preferences.
 
-Currently, two official plugins are available:
+## ✨ Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- 🤖 **AI-Powered Recommendations** - Smart song matching based on image analysis
+- 🌍 **Multi-Language Support** - English, Hindi, Marathi, Punjabi, Telugu, Tamil, Bengali
+- 🎵 **Real Market Songs** - Actual chart-topping hits with millions of views
+- 📱 **Modern UI** - Instagram-inspired design with smooth animations
+- ⬇️ **Download & Set on Photo** - Complete music integration
+- 🎨 **Beautiful Animations** - Floating music icons and dynamic backgrounds
+- 🗄️ **MongoDB Integration** - Scalable NoSQL database for user data
 
-## React Compiler
+## 🚀 Quick Start
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Option 1: With MongoDB (Recommended)
 
-## Expanding the ESLint configuration
+1. **Install MongoDB**
+   ```bash
+   # Windows: Download and install MongoDB Community Server
+   # macOS: brew install mongodb-community
+   # Ubuntu: sudo apt-get install mongodb
+   ```
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+2. **Start MongoDB**
+   ```bash
+   # Windows: Start MongoDB service from Services
+   # macOS/Linux: sudo systemctl start mongod
+   # Or run: mongod
+   ```
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+3. **Clone and setup**
+   ```bash
+   git clone https://github.com/Adityamohanchandane/instam.git
+   cd instam
+   npm install
+   ```
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+4. **Setup MongoDB database**
+   ```bash
+   npm run setup-mongodb
+   ```
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
+5. **Start the development server**
+   ```bash
+   npm run dev
+   ```
         project: ['./tsconfig.node.json', './tsconfig.app.json'],
         tsconfigRootDir: import.meta.dirname,
       },

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { RefreshCw, Settings } from 'lucide-react';
+import { mongodb } from '../lib/mongodb';
 import { getRecommendations } from '../lib/recommender';
 import AIMusicAssistant, { type SongRecommendation } from '../lib/aiMusicAssistant';
 import SongCard from './SongCard';
@@ -36,10 +37,19 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
 
   async function loadSongs() {
     try {
-      // Always use local songs database for better performance and no external dependencies
-      console.log('Loading local songs database...');
+      console.log('Loading songs from MongoDB...');
+      await mongodb.connect();
+      const songs = await mongodb.getSongs(50);
       
-      // Load real market released songs
+      if (songs && songs.length > 0) {
+        console.log(`✅ Loaded ${songs.length} songs from MongoDB`);
+        setSongs(songs);
+        return;
+      }
+      
+      console.log('No songs in MongoDB, using local database...');
+      
+      // Load real market released songs as fallback
       const mockSongs = [
         // English International Hits
         {
@@ -454,20 +464,34 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
     setResults(result);
     setSelectedSong(null);
 
-    // Save session to DB
+    // Save session to Supabase
     const songIds = result.songs.map(s => s.id);
-    const { data: sess } = await supabase.from('recommendation_sessions').insert({
-      session_id: userProfile.session_id,
-      image_mood: moodData,
-      image_scene: sceneData,
-      image_color_tone: colorData,
-      user_mood_override: overrideData,
-      recommended_song_ids: songIds,
-      safe_choice_id: result.safeChoice.id,
-      unique_pick_id: result.uniquePick.id,
-    }).select().maybeSingle();
+    console.log('Recommendations generated:', songIds.length, 'songs');
+    
+    try {
+      const sessionId = await mongodb.saveSession({
+        session_id: userProfile.session_id,
+        image_mood: moodData,
+        image_scene: sceneData,
+        image_color_tone: colorData,
+        user_mood_override: overrideData,
+        recommended_song_ids: songIds,
+        safe_choice_id: result.safeChoice.id,
+        unique_pick_id: result.uniquePick.id,
+      });
 
-    if (sess) setRecSessionId(sess.id);
+      if (sessionId) {
+        setRecSessionId(sessionId);
+        console.log('✅ Session saved to MongoDB:', sessionId);
+      } else {
+        setRecSessionId('local_' + Date.now());
+        console.log('⚠️ Using local session ID');
+      }
+    } catch (error) {
+      console.log('⚠️ Could not save session to MongoDB:', error.message);
+      setRecSessionId('local_' + Date.now());
+    }
+
     setLoading(false);
   }, [userProfile]);
 
@@ -484,13 +508,21 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
     newSkipped.add(song.id);
     setSkippedIds(newSkipped);
 
+    console.log('Song skipped:', song.title);
+    
+    // Save feedback to MongoDB
     if (recSessionId) {
-      await supabase.from('song_feedback').insert({
-        session_id: userProfile.session_id,
-        song_id: song.id,
-        recommendation_session_id: recSessionId,
-        action: 'skipped',
-      });
+      try {
+        await mongodb.saveFeedback({
+          session_id: userProfile.session_id,
+          song_id: song.id,
+          recommendation_session_id: recSessionId,
+          action: 'skipped',
+        });
+        console.log('✅ Skip feedback saved to MongoDB');
+      } catch (error) {
+        console.log('⚠️ Could not save skip feedback:', error.message);
+      }
     }
 
     // Replace skipped song with next best
@@ -501,25 +533,39 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
   }
 
   async function handleLike(song: SongWithReason) {
+    console.log('Song liked:', song.title);
+    
     if (recSessionId) {
-      await supabase.from('song_feedback').insert({
-        session_id: userProfile.session_id,
-        song_id: song.id,
-        recommendation_session_id: recSessionId,
-        action: 'liked',
-      });
+      try {
+        await mongodb.saveFeedback({
+          session_id: userProfile.session_id,
+          song_id: song.id,
+          recommendation_session_id: recSessionId,
+          action: 'liked',
+        });
+        console.log('✅ Like feedback saved to MongoDB');
+      } catch (error) {
+        console.log('⚠️ Could not save like feedback:', error.message);
+      }
     }
   }
 
   async function handleSelect(song: SongWithReason) {
     setSelectedSong(song.id);
+    console.log('Song selected:', song.title);
+    
     if (recSessionId) {
-      await supabase.from('song_feedback').insert({
-        session_id: userProfile.session_id,
-        song_id: song.id,
-        recommendation_session_id: recSessionId,
-        action: 'selected',
-      });
+      try {
+        await mongodb.saveFeedback({
+          session_id: userProfile.session_id,
+          song_id: song.id,
+          recommendation_session_id: recSessionId,
+          action: 'selected',
+        });
+        console.log('✅ Select feedback saved to MongoDB');
+      } catch (error) {
+        console.log('⚠️ Could not save select feedback:', error.message);
+      }
     }
   }
 
