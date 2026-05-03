@@ -70,7 +70,8 @@ export default function SongCard({ song, onLike, onSkip, onSelect, isSelected, o
 
   // Handle global play state (only one song can play at a time)
   useEffect(() => {
-    const handleGlobalPlay = (playingSongId: string) => {
+    const handleSongPlayingEvent = (e: any) => {
+      const playingSongId = e.detail.songId;
       if (playingSongId !== song.id) {
         setIsCurrentPlaying(false);
         setIsPlaying(false);
@@ -81,12 +82,10 @@ export default function SongCard({ song, onLike, onSkip, onSelect, isSelected, o
     };
 
     // Listen for custom event when another song starts playing
-    window.addEventListener('songPlaying', (e: any) => {
-      handleGlobalPlay(e.detail.songId);
-    });
+    window.addEventListener('songPlaying', handleSongPlayingEvent);
 
     return () => {
-      window.removeEventListener('songPlaying', handleGlobalPlay);
+      window.removeEventListener('songPlaying', handleSongPlayingEvent);
     };
   }, [song.id]);
 
