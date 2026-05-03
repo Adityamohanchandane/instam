@@ -1,11 +1,26 @@
-import { MongoClient, Db, Collection, ObjectId } from 'mongodb';
+// Browser-compatible MongoDB client
+// For now, we'll use local storage fallback until we set up API endpoints
 
 // MongoDB Configuration
 const MONGODB_URI = import.meta.env.VITE_MONGODB_URI || 'mongodb://localhost:27017';
 const DB_NAME = 'instam';
 
-let client: MongoClient | null = null;
-let db: Db | null = null;
+// Mock ObjectId for browser compatibility
+class MockObjectId {
+  constructor(private id?: string) {
+    this.id = id || Math.random().toString(36).substring(2, 15);
+  }
+  
+  toString() {
+    return this.id || Math.random().toString(36).substring(2, 15);
+  }
+  
+  static fromString(id: string) {
+    return new MockObjectId(id);
+  }
+}
+
+type ObjectId = MockObjectId;
 
 // MongoDB connection types
 interface Song {
@@ -64,172 +79,176 @@ interface SongFeedback {
   created_at?: Date;
 }
 
-// MongoDB Client Class
-class MongoDBClient {
-  private static instance: MongoDBClient;
+// Browser-compatible MongoDB operations using localStorage
+class BrowserMongoDB {
+  private songs: Song[] = [];
+  private profiles: UserProfile[] = [];
+  private sessions: RecommendationSession[] = [];
+  private feedback: SongFeedback[] = [];
   
-  private constructor() {}
-  
-  static getInstance(): MongoDBClient {
-    if (!MongoDBClient.instance) {
-      MongoDBClient.instance = new MongoDBClient();
-    }
-    return MongoDBClient.instance;
+  constructor() {
+    this.loadFromStorage();
   }
   
-  async connect(): Promise<Db> {
-    if (client && db) {
-      return db;
-    }
-    
+  private loadFromStorage() {
     try {
-      console.log('Connecting to MongoDB...');
-      client = new MongoClient(MONGODB_URI);
-      await client.connect();
-      db = client.db(DB_NAME);
-      console.log('✅ Connected to MongoDB successfully!');
-      return db;
-    } catch (error) {
-      console.error('❌ MongoDB connection failed:', error);
-      throw error;
-    }
-  }
-  
-  async disconnect(): Promise<void> {
-    if (client) {
-      await client.close();
-      client = null;
-      db = null;
-      console.log('Disconnected from MongoDB');
-    }
-  }
-  
-  // Collection getters
-  getSongsCollection(): Collection<Song> {
-    if (!db) throw new Error('Database not connected');
-    return db.collection<Song>('songs');
-  }
-  
-  getProfilesCollection(): Collection<UserProfile> {
-    if (!db) throw new Error('Database not connected');
-    return db.collection<UserProfile>('user_profiles');
-  }
-  
-  getSessionsCollection(): Collection<RecommendationSession> {
-    if (!db) throw new Error('Database not connected');
-    return db.collection<RecommendationSession>('recommendation_sessions');
-  }
-  
-  getFeedbackCollection(): Collection<SongFeedback> {
-    if (!db) throw new Error('Database not connected');
-    return db.collection<SongFeedback>('song_feedback');
-  }
-  
-  // Song operations
-  async getSongs(limit: number = 50): Promise<Song[]> {
-    try {
-      const collection = this.getSongsCollection();
-      const songs = await collection
-        .find({})
-        .sort({ play_count: -1 })
-        .limit(limit)
-        .toArray();
+      const storedSongs = localStorage.getItem('instam_songs');
+      const storedProfiles = localStorage.getItem('instam_profiles');
+      const storedSessions = localStorage.getItem('instam_sessions');
+      const storedFeedback = localStorage.getItem('instam_feedback');
       
-      // Convert MongoDB _id to string id for compatibility
-      return songs.map(song => ({
-        ...song,
-        id: song.id || song._id?.toString() || ''
-      }));
+      if (storedSongs) this.songs = JSON.parse(storedSongs);
+      if (storedProfiles) this.profiles = JSON.parse(storedProfiles);
+      if (storedSessions) this.sessions = JSON.parse(storedSessions);
+      if (storedFeedback) this.feedback = JSON.parse(storedFeedback);
+      
+      console.log('📦 Loaded data from localStorage');
     } catch (error) {
-      console.error('Error fetching songs:', error);
-      return [];
+      console.warn('Could not load from localStorage:', error);
     }
   }
   
-  async addSongs(songs: Omit<Song, '_id' | 'created_at' | 'updated_at'>[]): Promise<void> {
+  private saveToStorage() {
     try {
-      const collection = this.getSongsCollection();
-      const songsWithTimestamps = songs.map(song => ({
-        ...song,
+      localStorage.setItem('instam_songs', JSON.stringify(this.songs));
+      localStorage.setItem('instam_profiles', JSON.stringify(this.profiles));
+      localStorage.setItem('instam_sessions', JSON.stringify(this.sessions));
+      localStorage.setItem('instam_feedback', JSON.stringify(this.feedback));
+    } catch (error) {
+      console.warn('Could not save to localStorage:', error);
+    }
+  }
+  
+  async connect() {
+    console.log('📱 Using browser-compatible storage (localStorage)');
+    // Initialize with sample songs if empty
+    if (this.songs.length === 0) {
+      await this.initializeSampleSongs();
+    }
+    return this;
+  }
+  
+  async disconnect() {
+    console.log('📱 Browser storage disconnected');
+  }
+  
+  private async initializeSampleSongs() {
+    const sampleSongs: Song[] = [
+      {
+        id: 'en_1',
+        title: 'Shape of You',
+        artist: 'Ed Sheeran',
+        language: 'English',
+        genre: 'Pop',
+        mood_tags: ['happy', 'energetic', 'party'],
+        scene_tags: ['party', 'friends', 'celebration'],
+        personality_tags: ['chill', 'social', 'confident'],
+        color_tone_tags: ['vibrant', 'warm', 'golden'],
+        energy_level: 7,
+        is_trending: true,
+        trend_region: 'Global',
+        play_count: 3000000000,
+        youtube_query: 'shape of you ed sheeran official',
         created_at: new Date(),
         updated_at: new Date()
-      }));
-      await collection.insertMany(songsWithTimestamps);
-      console.log(`✅ Added ${songs.length} songs to MongoDB`);
-    } catch (error) {
-      console.error('Error adding songs:', error);
-    }
+      },
+      {
+        id: 'hi_1',
+        title: 'Tum Hi Ho',
+        artist: 'Arijit Singh',
+        language: 'Hindi',
+        genre: 'Romantic',
+        mood_tags: ['romantic', 'emotional', 'peaceful'],
+        scene_tags: ['couple', 'night', 'rain'],
+        personality_tags: ['romantic', 'emotional', 'soft'],
+        color_tone_tags: ['warm', 'moody', 'golden'],
+        energy_level: 4,
+        is_trending: false,
+        trend_region: 'India',
+        play_count: 1500000000,
+        youtube_query: 'tum hi ho aashiqui 2 arijit singh official',
+        created_at: new Date(),
+        updated_at: new Date()
+      },
+      {
+        id: 'mr_1',
+        title: 'Zingaat',
+        artist: 'Ajay-Atul',
+        language: 'Marathi',
+        genre: 'Folk',
+        mood_tags: ['energetic', 'happy', 'party'],
+        scene_tags: ['party', 'friends', 'celebration'],
+        personality_tags: ['energetic', 'social', 'confident'],
+        color_tone_tags: ['vibrant', 'warm', 'golden'],
+        energy_level: 10,
+        is_trending: true,
+        trend_region: 'Maharashtra',
+        play_count: 500000000,
+        youtube_query: 'zingaat sairat ajay atul official',
+        created_at: new Date(),
+        updated_at: new Date()
+      }
+    ];
+    
+    this.songs = sampleSongs;
+    this.saveToStorage();
+    console.log(`🎵 Initialized ${sampleSongs.length} sample songs`);
   }
   
-  // Profile operations
+  async getSongs(limit: number = 50): Promise<Song[]> {
+    return this.songs.slice(0, limit);
+  }
+  
   async getProfile(sessionId: string): Promise<UserProfile | null> {
-    try {
-      const collection = this.getProfilesCollection();
-      const profile = await collection.findOne({ session_id: sessionId });
-      return profile;
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-      return null;
-    }
+    return this.profiles.find(p => p.session_id === sessionId) || null;
   }
   
   async saveProfile(profile: Omit<UserProfile, '_id' | 'created_at' | 'updated_at'>): Promise<void> {
-    try {
-      const collection = this.getProfilesCollection();
-      await collection.updateOne(
-        { session_id: profile.session_id },
-        { 
-          $set: { 
-            ...profile, 
-            updated_at: new Date() 
-          },
-          $setOnInsert: { 
-            created_at: new Date() 
-          }
-        },
-        { upsert: true }
-      );
-      console.log('✅ Profile saved to MongoDB');
-    } catch (error) {
-      console.error('Error saving profile:', error);
+    const existingIndex = this.profiles.findIndex(p => p.session_id === profile.session_id);
+    const profileWithTimestamp = {
+      ...profile,
+      created_at: new Date(),
+      updated_at: new Date()
+    };
+    
+    if (existingIndex >= 0) {
+      this.profiles[existingIndex] = profileWithTimestamp;
+    } else {
+      this.profiles.push(profileWithTimestamp);
     }
+    
+    this.saveToStorage();
+    console.log('✅ Profile saved to localStorage');
   }
   
-  // Session operations
   async saveSession(session: Omit<RecommendationSession, '_id' | 'created_at'>): Promise<string | null> {
-    try {
-      const collection = this.getSessionsCollection();
-      const sessionWithTimestamp = {
-        ...session,
-        created_at: new Date()
-      };
-      const result = await collection.insertOne(sessionWithTimestamp);
-      console.log('✅ Session saved to MongoDB');
-      return result.insertedId.toString();
-    } catch (error) {
-      console.error('Error saving session:', error);
-      return null;
-    }
+    const sessionWithTimestamp = {
+      ...session,
+      _id: new MockObjectId(),
+      created_at: new Date()
+    };
+    
+    this.sessions.push(sessionWithTimestamp);
+    this.saveToStorage();
+    console.log('✅ Session saved to localStorage');
+    return sessionWithTimestamp._id.toString();
   }
   
-  // Feedback operations
-  async saveFeedback(feedback: Omit<SongFeedback, '_id' | 'created_at'>): Promise<void> {
-    try {
-      const collection = this.getFeedbackCollection();
-      const feedbackWithTimestamp = {
-        ...feedback,
-        created_at: new Date()
-      };
-      await collection.insertOne(feedbackWithTimestamp);
-      console.log('✅ Feedback saved to MongoDB');
-    } catch (error) {
-      console.error('Error saving feedback:', error);
-    }
+  async saveFeedback(feedbackData: Omit<SongFeedback, '_id' | 'created_at'>): Promise<void> {
+    const feedbackWithTimestamp = {
+      ...feedbackData,
+      _id: new MockObjectId(),
+      created_at: new Date()
+    };
+    
+    this.feedback.push(feedbackWithTimestamp);
+    this.saveToStorage();
+    console.log('✅ Feedback saved to localStorage');
   }
 }
 
 // Export singleton instance
-export const mongodb = MongoDBClient.getInstance();
+export const mongodb = new BrowserMongoDB();
 
 // Export types
 export type { Song, UserProfile, RecommendationSession, SongFeedback };
