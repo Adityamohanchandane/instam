@@ -11,6 +11,7 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
+  const [view, setView] = useState<'onboarding' | 'recommendations'>('onboarding');
 
   const sessionId = getSessionId();
 
@@ -19,7 +20,7 @@ export default function App() {
   }, []);
 
   async function loadProfile() {
-    const stored = localStorage.getItem('userProfile');
+    const stored = localStorage.getItem(PROFILE_KEY);
     if (stored) {
       const profile = JSON.parse(stored);
       setProfile(profile);
@@ -64,7 +65,7 @@ export default function App() {
       console.log('⚠️ Could not save profile to MongoDB:', error.message);
     }
     
-    localStorage.setItem('userProfile', JSON.stringify(p));
+    localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
     setProfile(p);
     setView('recommendations');
   }
@@ -83,7 +84,7 @@ export default function App() {
     );
   }
 
-  if (!profile || editMode) {
+  if (view === 'onboarding' || !profile || editMode) {
     return <Onboarding sessionId={sessionId} onComplete={handleOnboardingComplete} />;
   }
 
