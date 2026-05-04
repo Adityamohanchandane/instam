@@ -1,6 +1,8 @@
 // Browser-compatible MongoDB client with API fallback
 // Uses API endpoints to communicate with MongoDB Atlas
 
+import { deezerAPI } from './deezer-api';
+
 const API_BASE_URL = '/api'; // Will be created with Vite proxy or server
 
 // Mock ObjectId for browser compatibility
@@ -229,12 +231,41 @@ class MongoDBClient {
     }
     
     try {
+      // Try MongoDB API first
       const songs = await this.apiCall<Song[]>('/songs', { limit });
       this.songs = songs;
       this.saveToStorage();
       return songs;
     } catch (error) {
-      return this.songs.slice(0, limit);
+      // Fallback to Deezer API
+      console.log('🔄 MongoDB API failed, trying Deezer...');
+      try {
+        const deezerTracks = await deezerAPI.searchTracks('popular songs', limit);
+        const songs = deezerTracks.map(track => deezerAPI.convertToSong(track));
+        this.songs = songs;
+        this.saveToStorage();
+        console.log(`🎵 Loaded ${songs.length} songs from Deezer`);
+        return songs;
+      } catch (deezerError) {
+        console.log('❌ Deezer also failed, using local songs');
+        return this.songs.slice(0, limit);
+      }
+    }
+  }
+
+  async searchSongs(query: string, language: string = 'en', limit: number = 20): Promise<Song[]> {
+    console.log(`🔍 Searching for songs: "${query}" in ${language}`);
+    
+    try {
+      // Search Deezer API
+      const deezerTracks = await deezerAPI.searchTracks(query, limit);
+      const songs = deezerTracks.map(track => deezerAPI.convertToSong(track, language));
+      
+      console.log(`📊 Found ${songs.length} songs from Deezer`);
+      return songs;
+    } catch (error) {
+      console.error('❌ Deezer search failed:', error);
+      return [];
     }
   }
   
