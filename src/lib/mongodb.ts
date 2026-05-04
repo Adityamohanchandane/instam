@@ -294,6 +294,10 @@ class MongoDBClient {
   }
   
   async saveProfile(profile: Omit<UserProfile, '_id' | 'created_at' | 'updated_at'>): Promise<void> {
+    console.log('=== MONGODB: SAVE PROFILE STARTED ===');
+    console.log('Profile to save:', profile);
+    console.log('useLocalStorage:', this.useLocalStorage);
+    
     const profileWithTimestamp = {
       ...profile,
       created_at: new Date(),
@@ -301,11 +305,14 @@ class MongoDBClient {
     };
     
     if (this.useLocalStorage) {
+      console.log('Using localStorage for profile...');
       const existingIndex = this.profiles.findIndex(p => p.session_id === profile.session_id);
       if (existingIndex >= 0) {
         this.profiles[existingIndex] = profileWithTimestamp;
+        console.log('Updated existing profile');
       } else {
         this.profiles.push(profileWithTimestamp);
+        console.log('Added new profile');
       }
       this.saveToStorage();
       console.log('✅ Profile saved to localStorage');
@@ -313,9 +320,11 @@ class MongoDBClient {
     }
     
     try {
+      console.log('Saving profile to MongoDB API...');
       await this.apiCall('/profile', profileWithTimestamp);
       console.log('✅ Profile saved to MongoDB');
     } catch (error) {
+      console.log('❌ MongoDB save failed, using localStorage fallback:', error.message);
       // Fallback to localStorage
       const existingIndex = this.profiles.findIndex(p => p.session_id === profile.session_id);
       if (existingIndex >= 0) {

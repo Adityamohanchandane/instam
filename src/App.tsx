@@ -65,6 +65,10 @@ export default function App() {
   }
 
   async function handleOnboardingComplete(p: UserProfile) {
+    console.log('=== APP: ONBOARDING COMPLETE STARTED ===');
+    console.log('Received profile:', p);
+    console.log('PROFILE_KEY:', PROFILE_KEY);
+    
     try {
       console.log('Saving profile to MongoDB...');
       await mongodb.connect();
@@ -74,9 +78,19 @@ export default function App() {
       console.log('⚠️ Could not save profile to MongoDB:', error.message);
     }
     
+    console.log('Saving to localStorage...');
     localStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+    console.log('localStorage updated');
+    
+    console.log('Setting profile state...');
     setProfile(p);
+    console.log('Profile state set');
+    
+    console.log('Changing view to recommendations...');
     setView('recommendations');
+    console.log('✅ View changed to recommendations');
+    
+    console.log('=== APP: ONBOARDING COMPLETE FINISHED ===');
   }
 
   if (loading) {

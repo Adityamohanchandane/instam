@@ -149,6 +149,8 @@ app.get('/api/profile/:sessionId', async (req, res) => {
 
 app.post('/api/profile', async (req, res) => {
   try {
+    console.log('=== SERVER: PROFILE POST STARTED ===');
+    console.log('Received profile data:', req.body);
     const profileData = req.body;
     const { db } = await connectToDatabase();
     await db.collection('user_profiles').updateOne(

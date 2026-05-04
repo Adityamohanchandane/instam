@@ -69,13 +69,14 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
   }
 
   function handleFinish() {
-    console.log('handleFinish called');
-    console.log('langs:', langs);
-    console.log('traits:', traits);
-    console.log('genres:', genres);
-    console.log('artists:', artists);
+    console.log('=== HANDLE FINISH STARTED ===');
+    console.log('langs:', langs, 'length:', langs.length);
+    console.log('traits:', traits, 'length:', traits.length);
+    console.log('genres:', genres, 'length:', genres.length);
+    console.log('artists:', artists, 'length:', artists.length);
     console.log('intent:', intent);
     console.log('region:', region);
+    console.log('sessionId:', sessionId);
     
     const profile: UserProfile = {
       session_id: sessionId,
@@ -89,8 +90,18 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
     };
     
     console.log('Created profile:', profile);
-    console.log('Calling onComplete...');
-    onComplete(profile);
+    console.log('Calling onComplete function...');
+    console.log('onComplete type:', typeof onComplete);
+    console.log('=== CALLING ONCOMPLETE ===');
+    
+    try {
+      onComplete(profile);
+      console.log('✅ onComplete called successfully');
+    } catch (error) {
+      console.error('❌ onComplete failed:', error);
+    }
+    
+    console.log('=== HANDLE FINISH COMPLETED ===');
   }
 
   const steps = [
