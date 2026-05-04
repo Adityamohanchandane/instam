@@ -728,8 +728,11 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
   }
 
   function handleMoodChange(mood: MoodType | '') {
+    console.log('Mood changed to:', mood);
+    console.log('Previous mood override:', userMoodOverride);
     setUserMoodOverride(mood);
     if (hasImage) {
+      console.log('Generating recommendations with new mood...');
       generateRecommendations(songs, imageMood, imageScene, imageColorTone, mood, skippedIds);
     }
   }
@@ -742,8 +745,10 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
   }
 
   function handleColorChange(color: ColorTone) {
+    console.log('Color changed to:', color);
     setImageColorTone(color);
     if (hasImage) {
+      console.log('Generating recommendations with new color...');
       generateRecommendations(songs, imageMood, imageScene, color, userMoodOverride, skippedIds);
     }
   }

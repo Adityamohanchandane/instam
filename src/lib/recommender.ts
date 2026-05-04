@@ -115,6 +115,10 @@ function buildReason(song: Song, input: RecommendationInput): string {
 
 export function getRecommendations(songs: Song[], input: RecommendationInput, skippedIds: Set<string>): RecommendationResult {
   const mood = (input.userMoodOverride || input.imageMood) as MoodType;
+  console.log('getRecommendations called with:');
+  console.log('- imageMood:', input.imageMood);
+  console.log('- userMoodOverride:', input.userMoodOverride);
+  console.log('- final mood used:', mood);
 
   const scored: SongWithReason[] = songs
     .filter(s => !skippedIds.has(s.id))

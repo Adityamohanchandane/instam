@@ -66,7 +66,10 @@ export default function MoodSelector({ imageMood, imageScene, imageColorTone, us
           {MOODS.map(m => (
             <button
               key={m.value}
-              onClick={() => onMoodChange(m.value)}
+              onClick={() => {
+                console.log('Mood selected:', m.value, 'Current override:', userMoodOverride);
+                onMoodChange(m.value);
+              }}
               className={`mood-chip ${userMoodOverride === m.value ? 'active' : imageMood === m.value ? 'detected' : ''}`}
             >
               <span>{m.emoji}</span>
@@ -101,7 +104,10 @@ export default function MoodSelector({ imageMood, imageScene, imageColorTone, us
           {COLORS.map(c => (
             <button
               key={c.value}
-              onClick={() => onColorChange(c.value)}
+              onClick={() => {
+                console.log('Color tone selected:', c.value);
+                onColorChange(c.value);
+              }}
               className={`color-chip border-2 ${c.style} ${imageColorTone === c.value ? 'ring-2 ring-white scale-110' : 'opacity-70'}`}
             >
               <span className="text-xs text-white font-medium">{c.label}</span>
