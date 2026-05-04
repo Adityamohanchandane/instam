@@ -784,6 +784,7 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
           imageMood={imageMood}
           imageScene={imageScene}
           imageColorTone={imageColorTone}
+          userMoodOverride={userMoodOverride}
           onMoodChange={handleMoodChange}
           onSceneChange={handleSceneChange}
           onColorChange={handleColorChange}

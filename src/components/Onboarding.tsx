@@ -69,6 +69,14 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
   }
 
   function handleFinish() {
+    console.log('handleFinish called');
+    console.log('langs:', langs);
+    console.log('traits:', traits);
+    console.log('genres:', genres);
+    console.log('artists:', artists);
+    console.log('intent:', intent);
+    console.log('region:', region);
+    
     const profile: UserProfile = {
       session_id: sessionId,
       preferred_languages: langs.length > 0 ? langs : ['Hindi'],
@@ -79,6 +87,9 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
       age_group: '',
       region,
     };
+    
+    console.log('Created profile:', profile);
+    console.log('Calling onComplete...');
     onComplete(profile);
   }
 
@@ -228,7 +239,16 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
             <button onClick={() => setStep(step - 1)} className="btn-back">Back</button>
           )}
           <button
-            onClick={isLast ? handleFinish : () => setStep(step + 1)}
+            onClick={() => {
+              console.log('Button clicked, isLast:', isLast, 'step:', step);
+              if (isLast) {
+                console.log('Calling handleFinish...');
+                handleFinish();
+              } else {
+                console.log('Moving to next step...');
+                setStep(step + 1);
+              }
+            }}
             className="btn-next"
           >
             {isLast ? "Let's Vibe! 🎶" : 'Next →'}
@@ -236,7 +256,10 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
         </div>
 
         {step === 0 && (
-          <button onClick={handleFinish} className="skip-btn">Skip setup →</button>
+          <button onClick={() => {
+            console.log('Skip setup button clicked');
+            handleFinish();
+          }} className="skip-btn">Skip setup →</button>
         )}
       </div>
     </div>
