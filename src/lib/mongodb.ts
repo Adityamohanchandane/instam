@@ -1,9 +1,7 @@
-// Browser-compatible MongoDB client
-// For now, we'll use local storage fallback until we set up API endpoints
+// Browser-compatible MongoDB client with API fallback
+// Uses API endpoints to communicate with MongoDB Atlas
 
-// MongoDB Configuration
-const MONGODB_URI = import.meta.env.VITE_MONGODB_URI || 'mongodb://localhost:27017';
-const DB_NAME = 'instam';
+const API_BASE_URL = '/api'; // Will be created with Vite proxy or server
 
 // Mock ObjectId for browser compatibility
 class MockObjectId {
@@ -79,12 +77,13 @@ interface SongFeedback {
   created_at?: Date;
 }
 
-// Browser-compatible MongoDB operations using localStorage
-class BrowserMongoDB {
+// MongoDB client with API calls and localStorage fallback
+class MongoDBClient {
   private songs: Song[] = [];
   private profiles: UserProfile[] = [];
   private sessions: RecommendationSession[] = [];
   private feedback: SongFeedback[] = [];
+  private useLocalStorage = false;
   
   constructor() {
     this.loadFromStorage();
@@ -119,17 +118,46 @@ class BrowserMongoDB {
     }
   }
   
+  private async apiCall<T>(endpoint: string, data?: any): Promise<T> {
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: data ? 'POST' : 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: data ? JSON.stringify(data) : undefined,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`API call failed: ${response.statusText}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.warn('API call failed, falling back to localStorage:', error);
+      this.useLocalStorage = true;
+      throw error;
+    }
+  }
+  
   async connect() {
-    console.log('📱 Using browser-compatible storage (localStorage)');
-    // Initialize with sample songs if empty
-    if (this.songs.length === 0) {
-      await this.initializeSampleSongs();
+    try {
+      // Try to connect to MongoDB via API
+      await this.apiCall('/health');
+      console.log('🌐 Connected to MongoDB Atlas via API');
+      this.useLocalStorage = false;
+    } catch (error) {
+      console.log('📱 Falling back to localStorage');
+      this.useLocalStorage = true;
+      if (this.songs.length === 0) {
+        await this.initializeSampleSongs();
+      }
     }
     return this;
   }
   
   async disconnect() {
-    console.log('📱 Browser storage disconnected');
+    console.log('📱 MongoDB client disconnected');
   }
   
   private async initializeSampleSongs() {
@@ -196,59 +224,137 @@ class BrowserMongoDB {
   }
   
   async getSongs(limit: number = 50): Promise<Song[]> {
-    return this.songs.slice(0, limit);
+    if (this.useLocalStorage) {
+      return this.songs.slice(0, limit);
+    }
+    
+    try {
+      const songs = await this.apiCall<Song[]>('/songs', { limit });
+      this.songs = songs;
+      this.saveToStorage();
+      return songs;
+    } catch (error) {
+      return this.songs.slice(0, limit);
+    }
   }
   
   async getProfile(sessionId: string): Promise<UserProfile | null> {
-    return this.profiles.find(p => p.session_id === sessionId) || null;
+    if (this.useLocalStorage) {
+      return this.profiles.find(p => p.session_id === sessionId) || null;
+    }
+    
+    try {
+      const profile = await this.apiCall<UserProfile>(`/profile/${sessionId}`);
+      return profile;
+    } catch (error) {
+      return this.profiles.find(p => p.session_id === sessionId) || null;
+    }
   }
   
   async saveProfile(profile: Omit<UserProfile, '_id' | 'created_at' | 'updated_at'>): Promise<void> {
-    const existingIndex = this.profiles.findIndex(p => p.session_id === profile.session_id);
     const profileWithTimestamp = {
       ...profile,
       created_at: new Date(),
       updated_at: new Date()
     };
     
-    if (existingIndex >= 0) {
-      this.profiles[existingIndex] = profileWithTimestamp;
-    } else {
-      this.profiles.push(profileWithTimestamp);
+    if (this.useLocalStorage) {
+      const existingIndex = this.profiles.findIndex(p => p.session_id === profile.session_id);
+      if (existingIndex >= 0) {
+        this.profiles[existingIndex] = profileWithTimestamp;
+      } else {
+        this.profiles.push(profileWithTimestamp);
+      }
+      this.saveToStorage();
+      console.log('✅ Profile saved to localStorage');
+      return;
     }
     
-    this.saveToStorage();
-    console.log('✅ Profile saved to localStorage');
+    try {
+      await this.apiCall('/profile', profileWithTimestamp);
+      console.log('✅ Profile saved to MongoDB');
+    } catch (error) {
+      // Fallback to localStorage
+      const existingIndex = this.profiles.findIndex(p => p.session_id === profile.session_id);
+      if (existingIndex >= 0) {
+        this.profiles[existingIndex] = profileWithTimestamp;
+      } else {
+        this.profiles.push(profileWithTimestamp);
+      }
+      this.saveToStorage();
+      console.log('⚠️ Profile saved to localStorage (fallback)');
+    }
   }
   
   async saveSession(session: Omit<RecommendationSession, '_id' | 'created_at'>): Promise<string | null> {
     const sessionWithTimestamp = {
       ...session,
-      _id: new MockObjectId(),
       created_at: new Date()
     };
     
-    this.sessions.push(sessionWithTimestamp);
-    this.saveToStorage();
-    console.log('✅ Session saved to localStorage');
-    return sessionWithTimestamp._id.toString();
+    if (this.useLocalStorage) {
+      const sessionWithId = {
+        ...sessionWithTimestamp,
+        _id: new MockObjectId()
+      };
+      this.sessions.push(sessionWithId);
+      this.saveToStorage();
+      console.log('✅ Session saved to localStorage');
+      return sessionWithId._id.toString();
+    }
+    
+    try {
+      const result = await this.apiCall<{ id: string }>('/session', sessionWithTimestamp);
+      console.log('✅ Session saved to MongoDB');
+      return result.id;
+    } catch (error) {
+      // Fallback to localStorage
+      const sessionWithId = {
+        ...sessionWithTimestamp,
+        _id: new MockObjectId()
+      };
+      this.sessions.push(sessionWithId);
+      this.saveToStorage();
+      console.log('⚠️ Session saved to localStorage (fallback)');
+      return sessionWithId._id.toString();
+    }
   }
   
   async saveFeedback(feedbackData: Omit<SongFeedback, '_id' | 'created_at'>): Promise<void> {
     const feedbackWithTimestamp = {
       ...feedbackData,
-      _id: new MockObjectId(),
       created_at: new Date()
     };
     
-    this.feedback.push(feedbackWithTimestamp);
-    this.saveToStorage();
-    console.log('✅ Feedback saved to localStorage');
+    if (this.useLocalStorage) {
+      const feedbackWithId = {
+        ...feedbackWithTimestamp,
+        _id: new MockObjectId()
+      };
+      this.feedback.push(feedbackWithId);
+      this.saveToStorage();
+      console.log('✅ Feedback saved to localStorage');
+      return;
+    }
+    
+    try {
+      await this.apiCall('/feedback', feedbackWithTimestamp);
+      console.log('✅ Feedback saved to MongoDB');
+    } catch (error) {
+      // Fallback to localStorage
+      const feedbackWithId = {
+        ...feedbackWithTimestamp,
+        _id: new MockObjectId()
+      };
+      this.feedback.push(feedbackWithId);
+      this.saveToStorage();
+      console.log('⚠️ Feedback saved to localStorage (fallback)');
+    }
   }
 }
 
 // Export singleton instance
-export const mongodb = new BrowserMongoDB();
+export const mongodb = new MongoDBClient();
 
 // Export types
 export type { Song, UserProfile, RecommendationSession, SongFeedback };
