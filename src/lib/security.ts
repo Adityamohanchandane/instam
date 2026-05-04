@@ -4,7 +4,7 @@
 import CryptoJS from 'crypto-js';
 
 export class SecurityService {
-  private static readonly ENCRYPTION_KEY = process.env.VITE_ENCRYPTION_KEY || 'default-key-change-in-production';
+  private static readonly ENCRYPTION_KEY = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ENCRYPTION_KEY) || 'default-key-change-in-production';
   
   // Encrypt sensitive data
   static encrypt(text: string): string {

@@ -1,27 +1,29 @@
 // MongoDB Client for Server-Side Only
 // We'll create API routes for browser compatibility
 
-import { MongoClient, Db, Collection, ObjectId } from 'mongodb';
-
-import { SecurityService } from './security';
+import { MongoClient, Db, ObjectId } from 'mongodb';
 
 // Secure MongoDB URI handling
 const getMongoDBUri = (): string => {
-  // In production, use environment variable
-  if (process.env.NODE_ENV === 'production') {
-    const uri = process.env.VITE_MONGODB_URI;
-    if (!uri) {
-      throw new Error('VITE_MONGODB_URI must be set in production environment');
+  // Server-side environment (Node.js)
+  if (typeof process !== 'undefined' && process.env) {
+    // In production, use environment variable
+    if (process.env.NODE_ENV === 'production') {
+      const uri = process.env.VITE_MONGODB_URI;
+      if (!uri) {
+        throw new Error('VITE_MONGODB_URI must be set in production environment');
+      }
+      return uri;
     }
-    return uri;
+    
+    // In development, use environment variable or fallback
+    const storedUri = process.env.VITE_MONGODB_URI;
+    if (storedUri && storedUri !== 'mongodb+srv://instam:instam2007@cluster.t0hdrjh.mongodb.net/?appName=Cluster') {
+      return storedUri;
+    }
   }
   
-  // In development, use secure storage or fallback
-  const storedUri = process.env.VITE_MONGODB_URI;
-  if (storedUri && storedUri !== 'mongodb+srv://instam:instam2007@cluster.t0hdrjh.mongodb.net/?appName=Cluster') {
-    return storedUri;
-  }
-  
+  // Fallback for development
   return 'mongodb+srv://instam:instam2007@cluster.t0hdrjh.mongodb.net/?appName=Cluster';
 };
 
@@ -133,13 +135,13 @@ export class MongoDBService {
   }
 
   async addSongs(songs: Omit<Song, '_id' | 'created_at' | 'updated_at'>[]): Promise<void> {
-    const collection = this.db.collection<Song>('songs');
+    const collection = this.db.collection('songs');
     const songsWithTimestamps = songs.map(song => ({
       ...song,
       created_at: new Date(),
       updated_at: new Date()
     }));
-    await collection.insertMany(songsToWithTimestamps);
+    await collection.insertMany(songsWithTimestamps);
   }
 
   // Profiles

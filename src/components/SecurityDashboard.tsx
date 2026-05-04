@@ -3,7 +3,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { SecurityService } from '../lib/security';
-import { config } from '../lib/config';
 
 interface SecurityStatus {
   isSecureEnvironment: boolean;
@@ -35,10 +34,13 @@ export const SecurityDashboard: React.FC = () => {
   }, []);
 
   const checkSecurityStatus = () => {
+    // Browser environment - check import.meta.env
+    const encryptionKey = import.meta.env.VITE_ENCRYPTION_KEY;
+    
     const status: SecurityStatus = {
       isSecureEnvironment: SecurityService.isSecureEnvironment(),
-      encryptionEnabled: process.env.VITE_ENCRYPTION_KEY !== 'default-key-change-in-production',
-      defaultKeyWarning: process.env.VITE_ENCRYPTION_KEY === 'default-key-change-in-production',
+      encryptionEnabled: encryptionKey !== 'default-key-change-in-production',
+      defaultKeyWarning: encryptionKey === 'default-key-change-in-production',
       passwordStrength: SecurityService.validatePasswordStrength('')
     };
 
