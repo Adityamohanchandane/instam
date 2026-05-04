@@ -100,7 +100,12 @@ export default function ImageUpload({ onAnalyzed }: Props) {
           {!analyzing && (
             <button
               className="change-photo-btn"
-              onClick={(e) => { e.stopPropagation(); setPreview(null); inputRef.current?.click(); }}
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                console.log('Change photo button clicked');
+                setPreview(null); 
+                inputRef.current?.click(); 
+              }}
             >
               Change Photo
             </button>

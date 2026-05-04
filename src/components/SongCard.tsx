@@ -203,7 +203,11 @@ export default function SongCard({ song, onLike, onSkip, onSelect, isSelected, o
             <span className="lang-badge">{getLangFlag(song.language)} {song.language}</span>
             <span className="genre-badge">{song.genre}</span>
             {isCurrentPlaying && <span className="playing-badge">🎵 Playing {playMode === 'clip' ? '(30s)' : '(Full)'}</span>}
-            <span className="mode-badge" onClick={(e) => { e.stopPropagation(); togglePlayMode(); }}>
+            <span className="mode-badge" onClick={(e) => { 
+                e.stopPropagation(); 
+                console.log('Play mode toggled for:', song.title);
+                togglePlayMode(); 
+              }}>
               {playMode === 'clip' ? <Clock size={10} /> : <Music size={10} />}
               {playMode === 'clip' ? ' Clip' : ' Full'}
             </span>
@@ -231,21 +235,30 @@ export default function SongCard({ song, onLike, onSkip, onSelect, isSelected, o
       {/* Actions */}
       <div className="card-actions">
         <button
-          onClick={handleSkip}
+          onClick={() => {
+            console.log('Skip button clicked for:', song.title);
+            handleSkip();
+          }}
           className="action-btn skip"
           title="Skip this song"
         >
           <SkipForward size={16} />
         </button>
         <button
-          onClick={handleLike}
+          onClick={() => {
+            console.log('Like button clicked for:', song.title, 'Current liked:', liked);
+            handleLike();
+          }}
           className={`action-btn like ${liked ? 'active' : ''}`}
           title="Like"
         >
           <Heart size={16} fill={liked ? 'currentColor' : 'none'} />
         </button>
         <button
-          onClick={onSelect}
+          onClick={() => {
+            console.log('Select button clicked for:', song.title, 'Current selected:', isSelected);
+            onSelect();
+          }}
           className={`action-btn select ${isSelected ? 'active' : ''}`}
           title="Use this song"
         >
@@ -275,7 +288,10 @@ export default function SongCard({ song, onLike, onSkip, onSelect, isSelected, o
           <span>Shorts</span>
         </a>
         <button
-          onClick={handleDownload}
+          onClick={() => {
+            console.log('Download button clicked for:', song.title);
+            handleDownload();
+          }}
           className="action-btn download"
           title="Download music"
         >
@@ -283,7 +299,10 @@ export default function SongCard({ song, onLike, onSkip, onSelect, isSelected, o
           <span>Download</span>
         </button>
         <button
-          onClick={handleSetOnPhoto}
+          onClick={() => {
+            console.log('Set on photo button clicked for:', song.title);
+            handleSetOnPhoto();
+          }}
           className="action-btn set-on-photo"
           title="Set music on photo"
         >

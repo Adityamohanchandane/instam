@@ -762,10 +762,16 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
           <span>Instam</span>
         </div>
         <div className="top-actions">
-          <button onClick={() => setShowMoodPanel(!showMoodPanel)} className="icon-btn" title="Tune vibes">
+          <button onClick={() => {
+            console.log('Mood panel toggle clicked, current state:', showMoodPanel);
+            setShowMoodPanel(!showMoodPanel);
+          }} className="icon-btn" title="Tune vibes">
             <Settings size={18} />
           </button>
-          <button onClick={onEditProfile} className="profile-btn">
+          <button onClick={() => {
+            console.log('Edit profile button clicked');
+            onEditProfile();
+          }} className="profile-btn">
             {userProfile.personality_traits[0] === 'gangster' ? '🥷'
               : userProfile.personality_traits[0] === 'romantic' ? '💘'
               : userProfile.personality_traits[0] === 'chill' ? '😎'
@@ -818,7 +824,10 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
                 {userProfile.personality_traits[0] ? `Tuned for your ${userProfile.personality_traits[0]} vibe` : 'Personalized for you'}
               </p>
             </div>
-            <button onClick={handleRefresh} className="refresh-btn" title="Refresh">
+            <button onClick={() => {
+            console.log('Refresh button clicked');
+            handleRefresh();
+          }} className="refresh-btn" title="Refresh">
               <RefreshCw size={16} />
             </button>
           </div>
@@ -867,7 +876,10 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
         <div className="ai-recommendations">
           <div className="ai-header">
             <h3>🤖 AI Smart Recommendations</h3>
-            <button onClick={() => setShowAIRecommendations(false)} className="close-btn">×</button>
+            <button onClick={() => {
+            console.log('Close AI recommendations clicked');
+            setShowAIRecommendations(false);
+          }} className="close-btn">×</button>
           </div>
           <div className="ai-songs-list">
             {aiRecommendations.map((rec, index) => (

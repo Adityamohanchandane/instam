@@ -144,13 +144,19 @@ export const SecurityDashboard: React.FC = () => {
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                   <button
-                    onClick={() => setShowSecrets(!showSecrets)}
+                    onClick={() => {
+                      console.log('Toggle secrets clicked, current:', showSecrets);
+                      setShowSecrets(!showSecrets);
+                    }}
                     className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
                   >
                     {showSecrets ? '👁️' : '🙈'}
                   </button>
                   <button
-                    onClick={generateSecurePassword}
+                    onClick={() => {
+                      console.log('Generate password clicked');
+                      generateSecurePassword();
+                    }}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
                     🎲 Generate
@@ -201,7 +207,10 @@ export const SecurityDashboard: React.FC = () => {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
-                onClick={checkSecurityStatus}
+                onClick={() => {
+                  console.log('Refresh security status clicked');
+                  checkSecurityStatus();
+                }}
                 className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center space-x-2"
               >
                 <span>🔄</span>
@@ -209,8 +218,11 @@ export const SecurityDashboard: React.FC = () => {
               </button>
 
               <button
-                onClick={clearSensitiveData}
-                className="px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center space-x-2"
+                onClick={() => {
+                  console.log('Clear sensitive data clicked');
+                  clearSensitiveData();
+                }}
+                className="px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-600 flex items-center justify-center space-x-2"
               >
                 <span>🗑️</span>
                 <span>Clear Sensitive Data</span>

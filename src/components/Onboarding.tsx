@@ -102,7 +102,10 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
           {LANGUAGES.map(l => (
             <button
               key={l.value}
-              onClick={() => toggle(langs, setLangs, l.value)}
+              onClick={() => {
+                console.log('Language selected:', l.value);
+                toggle(langs, setLangs, l.value);
+              }}
               className={`lang-pill ${langs.includes(l.value) ? 'selected' : ''}`}
             >
               <span className="text-2xl">{l.flag}</span>
@@ -120,7 +123,10 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
           {PERSONALITIES.map(p => (
             <button
               key={p.value}
-              onClick={() => toggle(traits, setTraits, p.value)}
+              onClick={() => {
+                console.log('Personality selected:', p.value);
+                toggle(traits, setTraits, p.value);
+              }}
               className={`personality-card ${traits.includes(p.value) ? 'selected' : ''}`}
             >
               <span className="text-3xl">{p.emoji}</span>
@@ -140,7 +146,10 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
             {GENRES.map(g => (
               <button
                 key={g.value}
-                onClick={() => toggle(genres, setGenres, g.value)}
+                onClick={() => {
+                  console.log('Genre selected:', g.value);
+                  toggle(genres, setGenres, g.value);
+                }}
                 className={`genre-tag ${genres.includes(g.value) ? 'selected' : ''}`}
               >
                 {g.label}
@@ -157,14 +166,20 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
                 onChange={e => setArtistInput(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && addArtist()}
               />
-              <button onClick={addArtist} className="btn-sm">Add</button>
+              <button onClick={() => {
+                console.log('Add artist clicked:', artistInput);
+                addArtist();
+              }} className="btn-sm">Add</button>
             </div>
             {artists.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
                 {artists.map(a => (
                   <span key={a} className="artist-chip">
                     {a}
-                    <button onClick={() => setArtists(artists.filter(x => x !== a))} className="ml-1 opacity-60 hover:opacity-100">×</button>
+                    <button onClick={() => {
+                    console.log('Remove artist clicked:', a);
+                    setArtists(artists.filter(x => x !== a));
+                  }} className="ml-1 opacity-60 hover:opacity-100">×</button>
                   </span>
                 ))}
               </div>
@@ -182,7 +197,10 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
             {INTENTS.map(i => (
               <button
                 key={i.value}
-                onClick={() => setIntent(i.value as typeof intent)}
+                onClick={() => {
+                  console.log('Intent selected:', i.value);
+                  setIntent(i.value as typeof intent);
+                }}
                 className={`intent-card ${intent === i.value ? 'selected' : ''}`}
               >
                 <span className="text-3xl">{i.emoji}</span>
@@ -236,7 +254,10 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
         {/* Navigation */}
         <div className="onboard-nav">
           {step > 0 && (
-            <button onClick={() => setStep(step - 1)} className="btn-back">Back</button>
+            <button onClick={() => {
+                console.log('Back button clicked, current step:', step);
+                setStep(step - 1);
+              }} className="btn-back">Back</button>
           )}
           <button
             onClick={() => {
