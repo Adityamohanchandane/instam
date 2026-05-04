@@ -5,8 +5,10 @@ import { MongoClient, Db, ObjectId } from 'mongodb';
 
 // Secure MongoDB URI handling
 const getMongoDBUri = (): string => {
-  // Server-side environment (Node.js)
-  if (typeof process !== 'undefined' && process.env) {
+  // Check if we're in a Node.js environment
+  const isNodeJS = typeof process !== 'undefined' && process.versions && process.versions.node;
+  
+  if (isNodeJS && process.env) {
     // In production, use environment variable
     if (process.env.NODE_ENV === 'production') {
       const uri = process.env.VITE_MONGODB_URI;
@@ -23,7 +25,7 @@ const getMongoDBUri = (): string => {
     }
   }
   
-  // Fallback for development
+  // Fallback for development/browser
   return 'mongodb+srv://instam:instam2007@cluster.t0hdrjh.mongodb.net/?appName=Cluster';
 };
 
