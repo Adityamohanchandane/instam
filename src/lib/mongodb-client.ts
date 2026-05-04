@@ -3,7 +3,7 @@
 
 import { MongoClient, Db, Collection, ObjectId } from 'mongodb';
 
-const MONGODB_URI = import.meta.env.VITE_MONGODB_URI;
+const MONGODB_URI = process.env.VITE_MONGODB_URI || 'mongodb+srv://instam:instam2007@cluster.t0hdrjh.mongodb.net/?appName=Cluster';
 const DB_NAME = 'instam';
 
 if (!MONGODB_URI) {
