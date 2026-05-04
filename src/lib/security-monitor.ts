@@ -96,13 +96,15 @@ export class SecurityMonitor {
       this.addAlert('error', 'Application running on insecure HTTP connection');
     }
 
-    // Check for default encryption key
-    if (process.env.VITE_ENCRYPTION_KEY === 'default-key-change-in-production') {
+    // Check for default encryption key (browser environment)
+    const encryptionKey = import.meta.env.VITE_ENCRYPTION_KEY;
+    if (encryptionKey === 'default-key-change-in-production') {
       this.addAlert('warning', 'Using default encryption key - change in production');
     }
 
-    // Monitor for console access in production
-    if (process.env.NODE_ENV === 'production') {
+    // Monitor for console access in production (browser environment)
+    const nodeEnv = import.meta.env.MODE;
+    if (nodeEnv === 'production') {
       const originalLog = console.log;
       console.log = (...args) => {
         if (args.some(arg => typeof arg === 'string' && arg.includes('password'))) {
@@ -235,7 +237,8 @@ export class SecurityMonitor {
       severity = 'high';
     }
 
-    if (process.env.VITE_ENCRYPTION_KEY === 'default-key-change-in-production') {
+    const encryptionKey = import.meta.env.VITE_ENCRYPTION_KEY;
+    if (encryptionKey === 'default-key-change-in-production') {
       vulnerabilities.push('Default encryption key in use');
       severity = 'medium';
     }
