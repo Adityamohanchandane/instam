@@ -41,20 +41,96 @@ async function connectToDatabase() {
   }
 }
 
+// Deezer API proxy (server-side to avoid CORS)
+async function searchDeezer(query, limit = 20) {
+  try {
+    const response = await fetch(`https://api.deezer.com/search/track?q=${encodeURIComponent(query)}&limit=${limit}`);
+    if (!response.ok) {
+      throw new Error(`Deezer API error: ${response.status}`);
+    }
+    const data = await response.json();
+    return data.data || [];
+  } catch (error) {
+    console.error('❌ Deezer search failed:', error);
+    return [];
+  }
+}
+
 // Songs endpoints
 app.get('/api/songs', async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
     const { db } = await connectToDatabase();
+    
+    // Try MongoDB first
     const songs = await db.collection('songs')
       .find({})
       .sort({ play_count: -1 })
       .limit(limit)
       .toArray();
-    res.json(songs);
+    
+    if (songs.length > 0) {
+      console.log(`📊 Found ${songs.length} songs in MongoDB`);
+      res.json(songs);
+      return;
+    }
+    
+    // Fallback to Deezer API
+    console.log('🔄 No songs in MongoDB, trying Deezer API...');
+    const deezerTracks = await searchDeezer('popular songs', limit);
+    
+    if (deezerTracks.length > 0) {
+      // Convert Deezer tracks to our song format
+      const convertedSongs = deezerTracks.map(track => ({
+        id: `deezer_${track.id}`,
+        title: track.title,
+        artist: track.artist.name,
+        album: track.album.title,
+        language: 'en',
+        genre: 'Pop',
+        mood_tags: ['popular', 'trending'],
+        scene_tags: ['general'],
+        personality_tags: ['music_lover'],
+        color_tone_tags: ['neutral'],
+        energy_level: 5,
+        is_trending: track.rank > 500000,
+        trend_region: 'Global',
+        play_count: track.rank || 0,
+        youtube_query: `${track.title} ${track.artist.name}`,
+        preview_url: track.preview,
+        album_art: track.album.cover_medium,
+        duration: track.duration,
+        source: 'deezer'
+      }));
+      
+      console.log(`🎵 Loaded ${convertedSongs.length} songs from Deezer`);
+      res.json(convertedSongs);
+      return;
+    }
+    
+    // Final fallback - empty array
+    console.log('❌ No songs found anywhere');
+    res.json([]);
+    
   } catch (error) {
     console.error('Error fetching songs:', error);
     res.status(500).json({ error: 'Failed to fetch songs' });
+  }
+});
+
+// Deezer search endpoint
+app.get('/api/deezer/search', async (req, res) => {
+  try {
+    const { query, limit = 20 } = req.query;
+    if (!query) {
+      return res.status(400).json({ error: 'Query parameter is required' });
+    }
+    
+    const tracks = await searchDeezer(query, parseInt(limit));
+    res.json(tracks);
+  } catch (error) {
+    console.error('Error searching Deezer:', error);
+    res.status(500).json({ error: 'Failed to search Deezer' });
   }
 });
 

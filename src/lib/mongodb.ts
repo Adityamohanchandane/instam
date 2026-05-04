@@ -231,25 +231,14 @@ class MongoDBClient {
     }
     
     try {
-      // Try MongoDB API first
+      // Try MongoDB API (now includes Deezer fallback on server)
       const songs = await this.apiCall<Song[]>('/songs', { limit });
       this.songs = songs;
       this.saveToStorage();
       return songs;
     } catch (error) {
-      // Fallback to Deezer API
-      console.log('🔄 MongoDB API failed, trying Deezer...');
-      try {
-        const deezerTracks = await deezerAPI.searchTracks('popular songs', limit);
-        const songs = deezerTracks.map(track => deezerAPI.convertToSong(track));
-        this.songs = songs;
-        this.saveToStorage();
-        console.log(`🎵 Loaded ${songs.length} songs from Deezer`);
-        return songs;
-      } catch (deezerError) {
-        console.log('❌ Deezer also failed, using local songs');
-        return this.songs.slice(0, limit);
-      }
+      console.log('❌ API failed, using local songs');
+      return this.songs.slice(0, limit);
     }
   }
 
@@ -257,14 +246,36 @@ class MongoDBClient {
     console.log(`🔍 Searching for songs: "${query}" in ${language}`);
     
     try {
-      // Search Deezer API
-      const deezerTracks = await deezerAPI.searchTracks(query, limit);
-      const songs = deezerTracks.map(track => deezerAPI.convertToSong(track, language));
+      // Use server-side Deezer search to avoid CORS
+      const tracks = await this.apiCall<any[]>('/deezer/search', { query, limit });
       
-      console.log(`📊 Found ${songs.length} songs from Deezer`);
+      // Convert to our song format
+      const songs = tracks.map(track => ({
+        id: `deezer_${track.id}`,
+        title: track.title,
+        artist: track.artist.name,
+        album: track.album.title,
+        language: language,
+        genre: 'Pop',
+        mood_tags: ['search_result'],
+        scene_tags: ['general'],
+        personality_tags: ['music_lover'],
+        color_tone_tags: ['neutral'],
+        energy_level: 5,
+        is_trending: track.rank > 500000,
+        trend_region: 'Global',
+        play_count: track.rank || 0,
+        youtube_query: `${track.title} ${track.artist.name}`,
+        preview_url: track.preview,
+        album_art: track.album.cover_medium,
+        duration: track.duration,
+        source: 'deezer' as const
+      }));
+      
+      console.log(`📊 Found ${songs.length} songs from server-side Deezer`);
       return songs;
     } catch (error) {
-      console.error('❌ Deezer search failed:', error);
+      console.error('❌ Server-side Deezer search failed:', error);
       return [];
     }
   }

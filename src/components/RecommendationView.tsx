@@ -47,21 +47,7 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
         return;
       }
       
-      console.log('No songs in MongoDB, trying Deezer API...');
-      
-      // Try Deezer API for popular songs
-      try {
-        const searchResults = await mongodb.searchSongs('popular hits', 'en', 20);
-        if (searchResults.length > 0) {
-          console.log(`🎵 Loaded ${searchResults.length} songs from Deezer`);
-          setSongs(searchResults);
-          return;
-        }
-      } catch (deezerError) {
-        console.log('❌ Deezer API failed, using local database...');
-      }
-      
-      console.log('Using local database as final fallback...');
+      console.log('No songs in MongoDB, using local database as final fallback...');
       const mockSongs = [
         // English International Hits
         {
