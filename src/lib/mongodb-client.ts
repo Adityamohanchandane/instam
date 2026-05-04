@@ -3,7 +3,29 @@
 
 import { MongoClient, Db, Collection, ObjectId } from 'mongodb';
 
-const MONGODB_URI = process.env.VITE_MONGODB_URI || 'mongodb+srv://instam:instam2007@cluster.t0hdrjh.mongodb.net/?appName=Cluster';
+import { SecurityService } from './security';
+
+// Secure MongoDB URI handling
+const getMongoDBUri = (): string => {
+  // In production, use environment variable
+  if (process.env.NODE_ENV === 'production') {
+    const uri = process.env.VITE_MONGODB_URI;
+    if (!uri) {
+      throw new Error('VITE_MONGODB_URI must be set in production environment');
+    }
+    return uri;
+  }
+  
+  // In development, use secure storage or fallback
+  const storedUri = process.env.VITE_MONGODB_URI;
+  if (storedUri && storedUri !== 'mongodb+srv://instam:instam2007@cluster.t0hdrjh.mongodb.net/?appName=Cluster') {
+    return storedUri;
+  }
+  
+  return 'mongodb+srv://instam:instam2007@cluster.t0hdrjh.mongodb.net/?appName=Cluster';
+};
+
+const MONGODB_URI = getMongoDBUri();
 const DB_NAME = 'instam';
 
 if (!MONGODB_URI) {

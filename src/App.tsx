@@ -3,6 +3,8 @@ import { mongodb } from './lib/mongodb';
 import { getSessionId } from './lib/session';
 import Onboarding from './components/Onboarding';
 import RecommendationView from './components/RecommendationView';
+import { SecurityDashboard } from './components/SecurityDashboard';
+import { securityMonitor } from './lib/security-monitor';
 import type { UserProfile } from './lib/types';
 
 const PROFILE_KEY = 'instam_profile';
@@ -11,12 +13,19 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
-  const [view, setView] = useState<'onboarding' | 'recommendations'>('onboarding');
+  const [view, setView] = useState<'onboarding' | 'recommendations' | 'security'>('onboarding');
 
   const sessionId = getSessionId();
 
   useEffect(() => {
     loadProfile();
+    // Start security monitoring
+    securityMonitor.startMonitoring();
+    
+    return () => {
+      // Cleanup on unmount
+      securityMonitor.stopMonitoring();
+    };
   }, []);
 
   async function loadProfile() {
@@ -86,6 +95,10 @@ export default function App() {
 
   if (view === 'onboarding' || !profile || editMode) {
     return <Onboarding sessionId={sessionId} onComplete={handleOnboardingComplete} />;
+  }
+
+  if (view === 'security') {
+    return <SecurityDashboard />;
   }
 
   return <RecommendationView userProfile={profile} onEditProfile={() => setEditMode(true)} />;
