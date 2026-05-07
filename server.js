@@ -44,14 +44,31 @@ async function connectToDatabase() {
 // Deezer API proxy (server-side to avoid CORS)
 async function searchDeezer(query, limit = 20) {
   try {
+    console.log(`🔍 Server searching Deezer for: "${query}"`);
+    
     const response = await fetch(`https://api.deezer.com/search/track?q=${encodeURIComponent(query)}&limit=${limit}`);
+    
     if (!response.ok) {
-      throw new Error(`Deezer API error: ${response.status}`);
+      console.error(`❌ Deezer API HTTP error: ${response.status} ${response.statusText}`);
+      throw new Error(`Deezer API error: ${response.status} ${response.statusText}`);
     }
+    
     const data = await response.json();
+    
+    if (!data || !data.data) {
+      console.error('❌ Invalid Deezer API response structure');
+      return [];
+    }
+    
+    console.log(`✅ Server Deezer search successful: ${data.data.length} tracks found`);
     return data.data || [];
   } catch (error) {
-    console.error('❌ Deezer search failed:', error);
+    console.error('❌ Server Deezer search failed:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      query: query,
+      limit: limit
+    });
     return [];
   }
 }
@@ -131,6 +148,46 @@ app.get('/api/deezer/search', async (req, res) => {
   } catch (error) {
     console.error('Error searching Deezer:', error);
     res.status(500).json({ error: 'Failed to search Deezer' });
+  }
+});
+
+// API status check endpoint
+app.get('/api/status', async (req, res) => {
+  try {
+    console.log('🔍 Checking API status...');
+    
+    // Check MongoDB
+    let mongoStatus = 'disconnected';
+    try {
+      const { db } = await connectToDatabase();
+      await db.admin().ping();
+      mongoStatus = 'connected';
+    } catch (error) {
+      console.error('MongoDB status check failed:', error);
+    }
+    
+    // Check Deezer API
+    let deezerStatus = 'disconnected';
+    try {
+      const response = await fetch('https://api.deezer.com/search/track?q=test&limit=1');
+      deezerStatus = response.ok ? 'connected' : 'error';
+    } catch (error) {
+      console.error('Deezer status check failed:', error);
+    }
+    
+    const status = {
+      timestamp: new Date().toISOString(),
+      mongodb: mongoStatus,
+      deezer: deezerStatus,
+      server: 'running',
+      environment: process.env.NODE_ENV || 'development'
+    };
+    
+    console.log('✅ API status checked:', status);
+    res.json(status);
+  } catch (error) {
+    console.error('Error checking status:', error);
+    res.status(500).json({ error: 'Failed to check API status' });
   }
 });
 

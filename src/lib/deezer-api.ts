@@ -44,6 +44,26 @@ export interface Song {
 
 export class DeezerAPI {
   private readonly BASE_URL = 'https://api.deezer.com';
+  private static isAvailable: boolean | null = null;
+
+  // Check if Deezer API is available
+  static async checkAvailability(): Promise<boolean> {
+    if (this.isAvailable !== null) {
+      return this.isAvailable;
+    }
+
+    try {
+      console.log('🔍 Checking Deezer API availability...');
+      const response = await fetch('https://api.deezer.com/search/track?q=test&limit=1');
+      this.isAvailable = response.ok;
+      console.log(`✅ Deezer API availability: ${this.isAvailable ? 'Available' : 'Not Available'}`);
+      return this.isAvailable;
+    } catch (error) {
+      console.error('❌ Deezer API not available:', error);
+      this.isAvailable = false;
+      return false;
+    }
+  }
 
   async searchTracks(query: string, limit: number = 20): Promise<DeezerTrack[]> {
     try {
@@ -54,15 +74,27 @@ export class DeezerAPI {
       );
 
       if (!response.ok) {
-        throw new Error(`Deezer API error: ${response.status}`);
+        console.error(`❌ Deezer API HTTP error: ${response.status} ${response.statusText}`);
+        throw new Error(`Deezer API error: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
-      console.log(`📊 Found ${data.data.length} tracks from Deezer`);
       
+      if (!data || !data.data) {
+        console.error('❌ Invalid Deezer API response structure');
+        return [];
+      }
+      
+      console.log(`✅ Deezer search successful: ${data.data.length} tracks found`);
       return data.data || [];
     } catch (error) {
       console.error('❌ Deezer search failed:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        query: query,
+        limit: limit,
+        url: `${this.BASE_URL}/search/track?q=${encodeURIComponent(query)}&limit=${limit}`
+      });
       return [];
     }
   }
