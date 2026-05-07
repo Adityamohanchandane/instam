@@ -2,13 +2,44 @@
 // Advanced AI features for music and image analysis
 
 import * as tf from '@tensorflow/tfjs';
-import natural from 'natural';
+
+// Simple NLP implementation to avoid Natural library issues
+class SimpleTokenizer {
+  tokenize(text: string): string[] {
+    return text.toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(word => word.length > 0);
+  }
+}
+
+class SimpleSentimentAnalyzer {
+  private positiveWords = [
+    'good', 'great', 'amazing', 'love', 'happy', 'excellent', 'wonderful',
+    'fantastic', 'awesome', 'perfect', 'best', 'beautiful', 'nice', 'brilliant'
+  ];
+  
+  private negativeWords = [
+    'bad', 'terrible', 'hate', 'sad', 'angry', 'awful', 'horrible',
+    'worst', 'ugly', 'disgusting', 'disappointing', 'annoying', 'frustrating'
+  ];
+
+  getSentiment(tokens: string[]): number {
+    if (!tokens || tokens.length === 0) return 0;
+    
+    let score = 0;
+    tokens.forEach(token => {
+      if (this.positiveWords.includes(token)) score += 1;
+      if (this.negativeWords.includes(token)) score -= 1;
+    });
+    
+    return score / tokens.length;
+  }
+}
 
 // Initialize NLP tools
-const tokenizer = new natural.WordTokenizer();
-const stemmer = natural.PorterStemmer;
-const sentiment = new natural.SentimentAnalyzer('English', 
-  natural.PorterStemmer, 'afinn');
+const tokenizer = new SimpleTokenizer();
+const sentiment = new SimpleSentimentAnalyzer();
 
 export class AIServices {
   private static model: tf.LayersModel | null = null;
@@ -21,6 +52,13 @@ export class AIServices {
     try {
       console.log('🤖 Initializing AI Services...');
       
+      // Check if TensorFlow is available
+      if (typeof tf === 'undefined') {
+        console.log('⚠️ TensorFlow not available, using fallback mode');
+        this.isInitialized = true;
+        return;
+      }
+
       // Load pre-trained model for emotion detection
       // For now, we'll create a simple model
       this.model = tf.sequential({
@@ -41,6 +79,8 @@ export class AIServices {
       console.log('✅ AI Services initialized successfully');
     } catch (error) {
       console.error('❌ Failed to initialize AI Services:', error);
+      console.log('⚠️ Continuing with limited AI functionality');
+      this.isInitialized = true; // Allow basic functionality even if TensorFlow fails
     }
   }
 
@@ -52,24 +92,45 @@ export class AIServices {
     negative: string[];
   } {
     try {
-      const tokens = tokenizer.tokenize(text.toLowerCase());
-      const score = sentiment.getSentiment(tokens || []);
+      console.log('🧠 Analyzing sentiment for:', text);
+      
+      if (!text || typeof text !== 'string') {
+        console.log('⚠️ Invalid text input for sentiment analysis');
+        return { score: 0, comparative: 0, positive: [], negative: [] };
+      }
+
+      const tokens = tokenizer.tokenize(text);
+      console.log('📝 Tokenized text:', tokens);
+      
+      if (!tokens || tokens.length === 0) {
+        console.log('⚠️ No tokens found in text');
+        return { score: 0, comparative: 0, positive: [], negative: [] };
+      }
+
+      const score = sentiment.getSentiment(tokens);
+      console.log('📊 Sentiment score:', score);
       
       // Extract positive and negative words
-      const positiveWords = tokens?.filter(word => 
-        ['good', 'great', 'amazing', 'love', 'happy', 'excellent', 'wonderful'].includes(word)
-      ) || [];
+      const positiveWords = tokens.filter(word => 
+        ['good', 'great', 'amazing', 'love', 'happy', 'excellent', 'wonderful', 
+         'fantastic', 'awesome', 'perfect', 'best', 'beautiful', 'nice', 'brilliant',
+         'excellent', 'great', 'wonderful', 'fantastic', 'awesome'].includes(word)
+      );
       
-      const negativeWords = tokens?.filter(word => 
-        ['bad', 'terrible', 'hate', 'sad', 'angry', 'awful', 'horrible'].includes(word)
-      ) || [];
+      const negativeWords = tokens.filter(word => 
+        ['bad', 'terrible', 'hate', 'sad', 'angry', 'awful', 'horrible',
+         'worst', 'ugly', 'disgusting', 'disappointing', 'annoying', 'frustrating'].includes(word)
+      );
 
-      return {
+      const result = {
         score,
-        comparative: score / (tokens?.length || 1),
+        comparative: score / tokens.length,
         positive: positiveWords,
         negative: negativeWords
       };
+
+      console.log('✅ Sentiment analysis result:', result);
+      return result;
     } catch (error) {
       console.error('❌ Sentiment analysis failed:', error);
       return { score: 0, comparative: 0, positive: [], negative: [] };

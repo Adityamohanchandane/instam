@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { Settings, RefreshCw } from 'lucide-react';
 import { getRecommendations } from '../lib/recommender';
 import { mongodb } from '../lib/mongodb';
 import { AIServices } from '../lib/ai-services';
