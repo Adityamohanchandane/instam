@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
-import { RefreshCw, Settings } from 'lucide-react';
-import { mongodb } from '../lib/mongodb';
 import { getRecommendations } from '../lib/recommender';
+import { mongodb } from '../lib/mongodb';
+import { AIServices } from '../lib/ai-services';
+import { AdvancedMoodDetection } from '../lib/advanced-mood-detection';
+import { AIRecommendationEngine } from '../lib/ai-recommendation-engine';
 import AIMusicAssistant, { type SongRecommendation } from '../lib/aiMusicAssistant';
 import SongCard from './SongCard';
 import MoodSelector from './MoodSelector';
@@ -777,6 +779,12 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
               : userProfile.personality_traits[0] === 'chill' ? '😎'
               : userProfile.personality_traits[0] === 'spiritual' ? '🙏'
               : '🎭'}
+          </button>
+          <button onClick={() => {
+            console.log('AI demo button clicked');
+            window.location.href = '/ai-demo';
+          }} className="profile-btn" title="AI Features Demo">
+            🤖
           </button>
         </div>
       </div>

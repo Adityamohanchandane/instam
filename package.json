@@ -12,6 +12,7 @@
     "dev:full": "concurrently \"npm run server\" \"npm run dev\""
   },
   "dependencies": {
+    "@tensorflow/tfjs": "^4.22.0",
     "@types/crypto-js": "^4.2.2",
     "cors": "^2.8.6",
     "crypto-js": "^4.2.0",
@@ -19,6 +20,7 @@
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.14.0",
     "mongodb": "^7.2.0",
+    "natural": "^8.1.1",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-youtube": "^10.1.0"
