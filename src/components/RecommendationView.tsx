@@ -786,6 +786,12 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
           }} className="profile-btn" title="AI Features Demo">
             🤖
           </button>
+          <button onClick={() => {
+            console.log('API status button clicked');
+            window.location.href = '/api-status';
+          }} className="profile-btn" title="API Status Dashboard">
+            📊
+          </button>
         </div>
       </div>
 

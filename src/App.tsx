@@ -5,6 +5,7 @@ import Onboarding from './components/Onboarding';
 import RecommendationView from './components/RecommendationView';
 import { SecurityDashboard } from './components/SecurityDashboard';
 import AIFeaturesDemo from './components/AIFeaturesDemo';
+import APIStatusDashboard from './components/APIStatusDashboard';
 import { securityMonitor } from './lib/security-monitor';
 import type { UserProfile } from './lib/types';
 
@@ -14,7 +15,7 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
-  const [view, setView] = useState<'onboarding' | 'recommendations' | 'security' | 'ai-demo'>('onboarding');
+  const [view, setView] = useState<'onboarding' | 'recommendations' | 'security' | 'ai-demo' | 'api-status'>('onboarding');
 
   const sessionId = getSessionId();
 
@@ -118,6 +119,10 @@ export default function App() {
 
   if (view === 'ai-demo') {
     return <AIFeaturesDemo />;
+  }
+
+  if (view === 'api-status') {
+    return <APIStatusDashboard />;
   }
 
   return <RecommendationView userProfile={profile} onEditProfile={() => setEditMode(true)} />;
