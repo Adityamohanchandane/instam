@@ -91,8 +91,10 @@ export class SecurityMonitor {
 
   // Monitor environment security
   private monitorEnvironment(): void {
-    // Check for HTTPS
-    if (!SecurityService.isSecureEnvironment() && window.location.hostname !== 'localhost') {
+    // Check for HTTPS (but allow localhost for development)
+    if (!SecurityService.isSecureEnvironment() && 
+        window.location.hostname !== 'localhost' && 
+        window.location.hostname !== '127.0.0.1') {
       this.addAlert('error', 'Application running on insecure HTTP connection - data may not be safe');
     }
 

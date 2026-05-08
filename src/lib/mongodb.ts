@@ -132,17 +132,24 @@ class MongoDBClient {
   }
   
   async connect() {
+    // Skip API connection if already in localStorage mode
+    if (this.useLocalStorage) {
+      console.log('📱 Already using localStorage mode, skipping API connection');
+      return this;
+    }
+
     try {
       // Try to connect to MongoDB via API
       await this.apiCall('/health');
       console.log('🌐 Connected to MongoDB Atlas via API');
       this.useLocalStorage = false;
     } catch (error) {
-      console.log('📱 Falling back to localStorage');
+      console.log('❌ MongoDB connection failed, using localStorage:', error);
       this.useLocalStorage = true;
-      if (this.songs.length === 0) {
-        await this.initializeSampleSongs();
-      }
+      console.log('📱 Using localStorage fallback mode');
+    }
+    if (this.songs.length === 0) {
+      await this.initializeSampleSongs();
     }
     return this;
   }
