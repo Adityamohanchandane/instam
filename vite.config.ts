@@ -14,6 +14,7 @@ export default defineConfig({
   server: {
     port: 5173,
     host: true,
+    allowedHosts: ['instam.onrender.com'],
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
