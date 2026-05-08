@@ -147,6 +147,8 @@ class MongoDBClient {
       console.log('❌ MongoDB connection failed, using localStorage:', error);
       this.useLocalStorage = true;
       console.log('📱 Using localStorage fallback mode');
+      // Don't throw error to prevent React error boundary
+      console.log('⚠️ API connection failed but continuing with localStorage');
     }
     if (this.songs.length === 0) {
       await this.initializeSampleSongs();
