@@ -1,8 +1,6 @@
 // AI Services for Instam Project
 // Advanced AI features for music and image analysis
 
-import * as tf from '@tensorflow/tfjs';
-
 // Simple NLP implementation to avoid Natural library issues
 class SimpleTokenizer {
   tokenize(text: string): string[] {
@@ -42,7 +40,7 @@ const tokenizer = new SimpleTokenizer();
 const sentiment = new SimpleSentimentAnalyzer();
 
 export class AIServices {
-  private static model: tf.LayersModel | null = null;
+  private static model: any = null;
   private static isInitialized = false;
 
   // Initialize AI models
@@ -52,12 +50,8 @@ export class AIServices {
     try {
       console.log('🤖 Initializing AI Services...');
       
-      // Check if TensorFlow is available
-      if (typeof tf === 'undefined') {
-        console.log('⚠️ TensorFlow not available, using fallback mode');
-        this.isInitialized = true;
-        return;
-      }
+      // Load TensorFlow dynamically
+      const tf = await import('@tensorflow/tfjs');
 
       // Load pre-trained model for emotion detection
       // For now, we'll create a simple model

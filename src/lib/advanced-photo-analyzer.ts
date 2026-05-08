@@ -1,9 +1,6 @@
 // Advanced Photo Analyzer for Instam
 // Analyzes photos for scene, mood, objects, and context to suggest perfect songs
 
-import * as tf from '@tensorflow/tfjs';
-import * as cocoSsd from '@tensorflow-models/coco-ssd';
-
 export interface PhotoAnalysis {
   // Scene Analysis
   scene: {
@@ -52,6 +49,9 @@ export class AdvancedPhotoAnalyzer {
 
     try {
       console.log('🧠 Loading AI models...');
+      const tf = await import('@tensorflow/tfjs');
+      const cocoSsd = await import('@tensorflow-models/coco-ssd');
+      
       await tf.ready();
       this.model = await cocoSsd.load();
       this.isInitialized = true;

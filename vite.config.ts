@@ -24,9 +24,13 @@ export default defineConfig({
     }
   },
   build: {
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
-      input: {
-        main: path.resolve(__dirname, 'index.html')
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          tensorflow: ['@tensorflow/tfjs', '@tensorflow-models/coco-ssd']
+        }
       }
     }
   }
