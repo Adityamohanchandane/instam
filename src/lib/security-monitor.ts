@@ -29,6 +29,12 @@ export class SecurityMonitor {
   startMonitoring(): void {
     if (this.monitoring) return;
     
+    // Skip monitoring in development to prevent false alerts
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      console.log('🔒 Security monitoring disabled for localhost development');
+      return;
+    }
+    
     this.monitoring = true;
     console.log('🔒 Security monitoring started');
 
