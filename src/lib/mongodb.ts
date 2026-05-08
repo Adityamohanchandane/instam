@@ -4,7 +4,9 @@
 import { deezerAPI } from './deezer-api';
 import type { UserProfile } from './types';
 
-const API_BASE_URL = '/api'; // Will be created with Vite proxy or server
+const API_BASE_URL = import.meta.env.DEV === 'true' 
+  ? 'http://localhost:3001/api' 
+  : '/api'; // Use relative path for Vite proxy in production
 
 // Mock ObjectId for browser compatibility
 class MockObjectId {
