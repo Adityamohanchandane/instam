@@ -239,7 +239,7 @@ class AIMusicAssistant {
       recommendations.push({
         song: song.song,
         artist: song.artist,
-        type: song.type,
+        type: song.type as 'trending' | 'new' | 'classic',
         reason: song.reason
       });
     });
@@ -259,7 +259,7 @@ class AIMusicAssistant {
     return songs.map(song => ({
       song: song.song,
       artist: song.artist,
-      type: song.type,
+      type: song.type as 'trending' | 'new' | 'classic',
       reason: `Trending globally with ${song.views} views - perfect for staying current`
     }));
   }
@@ -269,7 +269,7 @@ class AIMusicAssistant {
     return NEW_RELEASES.map(song => ({
       song: song.song,
       artist: song.artist,
-      type: song.type,
+      type: song.type as 'trending' | 'new' | 'classic',
       reason: `Fresh release from ${song.release} - be the first to use it`
     }));
   }

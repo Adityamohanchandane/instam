@@ -90,7 +90,7 @@ export class DeezerAPI {
     } catch (error) {
       console.error('❌ Deezer search failed:', error);
       console.error('❌ Error details:', {
-        message: error.message,
+        message: error instanceof Error ? error.message : 'Unknown error',
         query: query,
         limit: limit,
         url: `${this.BASE_URL}/search/track?q=${encodeURIComponent(query)}&limit=${limit}`

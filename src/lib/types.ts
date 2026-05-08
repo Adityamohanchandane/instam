@@ -10,13 +10,19 @@ export type ColorTone = 'dark' | 'warm' | 'vibrant' | 'moody' | 'neon' | 'golden
 export interface UserProfile {
   id?: string;
   session_id: string;
-  preferred_languages: Language[];
-  personality_traits: PersonalityTrait[];
-  favorite_genres: Genre[];
-  favorite_artists: string[];
-  usage_intent: UsageIntent;
-  age_group: string;
-  region: string;
+  preferred_languages?: Language[];
+  personality_traits?: PersonalityTrait[];
+  favorite_genres?: Genre[];
+  favorite_artists?: string[];
+  usage_intent?: UsageIntent;
+  age_group?: string;
+  region?: string;
+  name?: string;
+  age?: number;
+  music_taste?: string;
+  _id?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Song {

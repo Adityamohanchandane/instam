@@ -1,8 +1,29 @@
 // AI-Powered Recommendation Engine
 // Advanced music recommendation using machine learning
 
-import { AIServices } from './ai-services';
-import { AdvancedMoodDetection, AdvancedMoodAnalysis } from './advanced-mood-detection';
+export interface AdvancedMoodAnalysis {
+  primaryMood: string;
+  confidence: number;
+  emotions: {
+    happy: number;
+    sad: number;
+    energetic: number;
+    peaceful: number;
+    romantic: number;
+    aggressive: number;
+    confident: number;
+    nostalgic: number;
+    lonely: number;
+    party: number;
+    attitude: number;
+  };
+  contextFactors: {
+    timeOfDay: number;
+    socialContext: number;
+  };
+  aiInsights: string[];
+  recommendations: string[];
+}
 
 export interface AIRecommendation {
   song: any;
@@ -415,8 +436,8 @@ export class AIRecommendationEngine {
     factors: any,
     behaviorPatterns?: any
   ): number {
-    const factorScores = Object.values(factors);
-    const averageScore = factorScores.reduce((a: number, b: any) => a + b, 0) / factorScores.length;
+    const factorScores = Object.values(factors).filter((score): score is number => typeof score === 'number');
+    const averageScore = factorScores.reduce((sum: number, score: number) => sum + score, 0) / factorScores.length;
 
     // Boost confidence if we have behavior data
     const behaviorBoost = behaviorPatterns ? 0.1 : 0;
@@ -560,3 +581,283 @@ export class AIRecommendationEngine {
 
 // Initialize on import
 AIRecommendationEngine.initialize().catch(console.error);
+
+// Advanced human-like mood prediction
+export class HumanLikeMoodPredictor {
+  static predictUserMood(context: {
+    timeOfDay: number;
+    dayOfWeek: number;
+    recentMoods: string[];
+    weather?: string;
+    location?: string;
+    socialActivity?: string;
+  }): {
+    predictedMood: string;
+    confidence: number;
+    reasoning: string[];
+    suggestions: string[];
+  } {
+    try {
+      const { timeOfDay, dayOfWeek, recentMoods, weather, location, socialActivity } = context;
+
+      // Human-like mood patterns based on psychology
+      const timeMoodMap = {
+        morning: ['energetic', 'happy', 'peaceful'],
+        afternoon: ['confident', 'energetic', 'focused'],
+        evening: ['romantic', 'peaceful', 'nostalgic'],
+        night: ['lonely', 'romantic', 'attitude']
+      };
+
+      const dayMoodMap = {
+        weekday: ['confident', 'energetic', 'focused'],
+        weekend: ['happy', 'party', 'relaxed']
+      };
+
+      // Analyze recent mood patterns
+      const moodFrequency: Record<string, number> = {};
+      recentMoods.forEach(mood => {
+        moodFrequency[mood] = (moodFrequency[mood] || 0) + 1;
+      });
+
+      // Determine time-based mood
+      let timeMood = 'happy';
+      if (timeOfDay >= 6 && timeOfDay < 12) timeMood = 'energetic';
+      else if (timeOfDay >= 12 && timeOfDay < 18) timeMood = 'confident';
+      else if (timeOfDay >= 18 && timeOfDay < 22) timeMood = 'romantic';
+      else timeMood = 'peaceful';
+
+      // Determine day-based mood
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      const dayMood = isWeekend ? 'happy' : 'confident';
+
+      // Weather influence (psychology-based)
+      let weatherMood = 'neutral';
+      if (weather?.includes('sunny') || weather?.includes('clear')) weatherMood = 'happy';
+      else if (weather?.includes('rainy') || weather?.includes('stormy')) weatherMood = 'romantic';
+      else if (weather?.includes('cloudy') || weather?.includes('overcast')) weatherMood = 'peaceful';
+      else if (weather?.includes('snowy')) weatherMood = 'nostalgic';
+
+      // Social context influence
+      let socialMood = 'neutral';
+      if (socialActivity?.includes('party') || socialActivity?.includes('celebration')) socialMood = 'party';
+      else if (socialActivity?.includes('date') || socialActivity?.includes('romantic')) socialMood = 'romantic';
+      else if (socialActivity?.includes('work') || socialActivity?.includes('meeting')) socialMood = 'confident';
+      else if (socialActivity?.includes('alone') || socialActivity?.includes('relaxing')) socialMood = 'peaceful';
+
+      // Location influence
+      let locationMood = 'neutral';
+      if (location?.includes('beach') || location?.includes('vacation')) locationMood = 'happy';
+      else if (location?.includes('home') || location?.includes('cozy')) locationMood = 'peaceful';
+      else if (location?.includes('city') || location?.includes('urban')) locationMood = 'energetic';
+
+      // Combine all factors with human psychology weighting
+      const moodScores: Record<string, number> = {};
+
+      // Recent mood history (35% weight - habits matter)
+      Object.entries(moodFrequency).forEach(([mood, count]) => {
+        moodScores[mood] = (moodScores[mood] || 0) + (count / recentMoods.length) * 0.35;
+      });
+
+      // Time of day (25% weight - circadian rhythms)
+      timeMoodMap[timeMood as keyof typeof timeMoodMap]?.forEach(mood => {
+        moodScores[mood] = (moodScores[mood] || 0) + 0.25 / timeMoodMap[timeMood as keyof typeof timeMoodMap].length;
+      });
+
+      // Day of week (15% weight - weekly patterns)
+      dayMoodMap[isWeekend ? 'weekend' : 'weekday' as keyof typeof dayMoodMap]?.forEach(mood => {
+        moodScores[mood] = (moodScores[mood] || 0) + 0.15 / dayMoodMap[isWeekend ? 'weekend' : 'weekday' as keyof typeof dayMoodMap].length;
+      });
+
+      // Weather (10% weight - environmental psychology)
+      if (weatherMood !== 'neutral') {
+        moodScores[weatherMood] = (moodScores[weatherMood] || 0) + 0.1;
+      }
+
+      // Social context (10% weight - social psychology)
+      if (socialMood !== 'neutral') {
+        moodScores[socialMood] = (moodScores[socialMood] || 0) + 0.1;
+      }
+
+      // Location (5% weight - environmental context)
+      if (locationMood !== 'neutral') {
+        moodScores[locationMood] = (moodScores[locationMood] || 0) + 0.05;
+      }
+
+      // Find predicted mood
+      const sortedMoods = Object.entries(moodScores).sort(([,a], [,b]) => b - a);
+      const predictedMood = sortedMoods[0]?.[0] || 'happy';
+      const confidence = Math.min(sortedMoods[0]?.[1] || 0, 1);
+
+      // Generate human-like reasoning
+      const reasoning: string[] = [];
+
+      // Time-based reasoning
+      if (timeOfDay >= 6 && timeOfDay < 12) {
+        reasoning.push("🌅 Morning time - people naturally feel more energetic and positive");
+      } else if (timeOfDay >= 12 && timeOfDay < 18) {
+        reasoning.push("☀️ Afternoon energy - confidence and focus peak during this time");
+      } else if (timeOfDay >= 18 && timeOfDay < 22) {
+        reasoning.push("🌆 Evening vibes - romantic and relaxed feelings emerge");
+      } else {
+        reasoning.push("🌙 Late night - introspective and emotional moods surface");
+      }
+
+      // Day-based reasoning
+      if (isWeekend) {
+        reasoning.push("🎉 It's the weekend - time to feel carefree and happy!");
+      } else {
+        reasoning.push("💼 Weekday rhythm - focused and confident energy");
+      }
+
+      // Weather reasoning
+      if (weather) {
+        if (weather.includes('sunny')) {
+          reasoning.push("☀️ Sunny weather naturally boosts happy feelings");
+        } else if (weather.includes('rainy')) {
+          reasoning.push("🌧️ Rainy days often bring romantic, nostalgic moods");
+        }
+      }
+
+      // Recent mood reasoning
+      if (recentMoods.length > 0) {
+        const topRecentMood = Object.entries(moodFrequency).sort(([,a], [,b]) => b - a)[0]?.[0];
+        if (topRecentMood) {
+          reasoning.push(`📊 Based on your recent ${topRecentMood} moods`);
+        }
+      }
+
+      // Social context reasoning
+      if (socialActivity) {
+        if (socialActivity.includes('party')) {
+          reasoning.push("🎊 Party context suggests energetic, fun music");
+        } else if (socialActivity.includes('date')) {
+          reasoning.push("💕 Romantic setting calls for love songs");
+        }
+      }
+
+      // Generate personalized suggestions
+      const suggestions: string[] = [];
+      if (predictedMood === 'energetic') {
+        suggestions.push("🎵 High-energy beats to match your vibrant mood!");
+        suggestions.push("💃 Dance music and upbeat pop anthems");
+        suggestions.push("⚡ Songs that make you want to move and groove");
+      } else if (predictedMood === 'romantic') {
+        suggestions.push("💖 Soft, emotional ballads for romantic moments");
+        suggestions.push("🌹 Love songs and heartfelt melodies");
+        suggestions.push("😍 Music that captures the feeling of being in love");
+      } else if (predictedMood === 'peaceful') {
+        suggestions.push("🧘 Calming instrumental music for relaxation");
+        suggestions.push("🌸 Gentle acoustic melodies and nature sounds");
+        suggestions.push("😌 Songs that help you unwind and find peace");
+      } else if (predictedMood === 'happy') {
+        suggestions.push("😄 Cheerful, feel-good songs to boost your happiness!");
+        suggestions.push("🎉 Fun pop hits and joyful anthems");
+        suggestions.push("✨ Music that makes you smile and dance");
+      } else if (predictedMood === 'confident') {
+        suggestions.push("💪 Powerful, motivational tracks for confidence");
+        suggestions.push("🚀 Upbeat songs that make you feel unstoppable");
+        suggestions.push("💎 Music that matches your strong, confident vibe");
+      } else if (predictedMood === 'nostalgic') {
+        suggestions.push("🕰️ Classic hits that bring back fond memories");
+        suggestions.push("📻 Timeless songs from your favorite eras");
+        suggestions.push("💭 Melancholic yet beautiful melodies");
+      } else if (predictedMood === 'party') {
+        suggestions.push("🎊 Dance floor anthems and party starters!");
+        suggestions.push("🥳 High-energy tracks for celebrations");
+        suggestions.push("🎶 Songs that get everyone moving");
+      } else if (predictedMood === 'attitude') {
+        suggestions.push("😎 Bold, confident tracks with attitude");
+        suggestions.push("💅 Fierce music that matches your vibe");
+        suggestions.push("🔥 Songs that make you feel powerful");
+      }
+
+      return {
+        predictedMood,
+        confidence,
+        reasoning,
+        suggestions
+      };
+    } catch (error) {
+      console.error('❌ Human-like mood prediction failed:', error);
+      return {
+        predictedMood: 'happy',
+        confidence: 0.5,
+        reasoning: ['🤔 Using default happy mood based on general positivity'],
+        suggestions: ['🎵 General feel-good music recommendations']
+      };
+    }
+  }
+
+  // Get mood-based music therapy insights
+  static getMoodTherapyInsights(mood: string): {
+    therapy: string;
+    benefits: string[];
+    recommendedGenres: string[];
+    activities: string[];
+  } {
+    const therapyMap: Record<string, any> = {
+      happy: {
+        therapy: "Celebrate and amplify your positive energy!",
+        benefits: ["Boosts endorphins", "Enhances social connections", "Increases motivation"],
+        recommendedGenres: ["Pop", "Dance", "Upbeat Electronic"],
+        activities: ["Dance", "Sing along", "Share with friends"]
+      },
+      sad: {
+        therapy: "Gentle emotional processing and comfort",
+        benefits: ["Emotional release", "Comfort during difficult times", "Mood elevation"],
+        recommendedGenres: ["Soft Pop", "Acoustic", "Indie Folk"],
+        activities: ["Listen quietly", "Journal feelings", "Light exercise"]
+      },
+      energetic: {
+        therapy: "Channel your energy productively",
+        benefits: ["Stress relief", "Physical activity boost", "Creativity enhancement"],
+        recommendedGenres: ["Electronic", "Rock", "Hip-Hop"],
+        activities: ["Workout", "Dance", "Creative projects"]
+      },
+      romantic: {
+        therapy: "Deepen emotional connections",
+        benefits: ["Relationship bonding", "Emotional intimacy", "Stress reduction"],
+        recommendedGenres: ["R&B", "Soft Rock", "Ballads"],
+        activities: ["Quality time", "Romantic gestures", "Shared listening"]
+      },
+      peaceful: {
+        therapy: "Mindfulness and relaxation",
+        benefits: ["Stress reduction", "Better sleep", "Mental clarity"],
+        recommendedGenres: ["Ambient", "Classical", "Lo-fi"],
+        activities: ["Meditation", "Reading", "Nature walks"]
+      },
+      confident: {
+        therapy: "Self-empowerment and motivation",
+        benefits: ["Self-esteem boost", "Goal achievement", "Leadership qualities"],
+        recommendedGenres: ["Motivational", "Rock", "Hip-Hop"],
+        activities: ["Exercise", "Goal setting", "Positive affirmations"]
+      },
+      nostalgic: {
+        therapy: "Emotional reflection and memory processing",
+        benefits: ["Emotional healing", "Gratitude cultivation", "Life perspective"],
+        recommendedGenres: ["Classic Rock", "80s/90s Pop", "Folk"],
+        activities: ["Memory sharing", "Photo viewing", "Gratitude journaling"]
+      },
+      lonely: {
+        therapy: "Connection and comfort seeking",
+        benefits: ["Emotional comfort", "Social connection reminder", "Hope cultivation"],
+        recommendedGenres: ["Singer-Songwriter", "Indie", "Alternative"],
+        activities: ["Reach out to loved ones", "Self-care activities", "Creative expression"]
+      },
+      party: {
+        therapy: "Social bonding and celebration",
+        benefits: ["Social connection", "Joy amplification", "Memory creation"],
+        recommendedGenres: ["Dance", "Pop", "Electronic"],
+        activities: ["Dance parties", "Social gatherings", "Celebration rituals"]
+      },
+      attitude: {
+        therapy: "Self-expression and confidence building",
+        benefits: ["Self-expression", "Confidence building", "Empowerment"],
+        recommendedGenres: ["Hip-Hop", "Rock", "R&B"],
+        activities: ["Self-expression", "Style exploration", "Goal pursuit"]
+      }
+    };
+
+    return therapyMap[mood] || therapyMap.happy;
+  }
+}

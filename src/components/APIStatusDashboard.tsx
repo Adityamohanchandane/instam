@@ -1,7 +1,7 @@
 // API Status Dashboard Component
 // Real-time monitoring of all API endpoints
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 interface APIStatus {
   name: string;
@@ -112,7 +112,7 @@ export default function APIStatusDashboard() {
         status: 'disconnected',
         responseTime: 0,
         lastChecked: new Date().toLocaleTimeString(),
-        details: { error: error.message }
+        details: { error: error instanceof Error ? error.message : 'Unknown error' }
       };
     }
   };

@@ -1,7 +1,7 @@
 // AI Features Demo Component
 // Showcase advanced AI capabilities
 
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { AIServices } from '../lib/ai-services';
 import { AdvancedMoodDetection } from '../lib/advanced-mood-detection';
 import { AIRecommendationEngine } from '../lib/ai-recommendation-engine';

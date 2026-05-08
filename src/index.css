@@ -994,14 +994,197 @@ html, body {
   font-weight: 500;
 }
 
-/* ── Empty state ── */
-.empty-state {
+/* ── Smart Mood Prediction ── */
+.mood-prediction-panel {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 20px;
+  animation: slide-down 0.3s ease-out;
+}
+
+.mood-prediction-header {
   display: flex;
-  flex-direction: column;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  padding: 48px 20px;
-  text-align: center;
+  margin-bottom: 16px;
+}
+
+.mood-prediction-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.confidence-badge {
+  background: var(--accent);
+  color: white;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.predicted-mood {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: var(--bg-highlight);
+  border-radius: var(--radius-md);
+}
+
+.mood-emoji {
+  font-size: 48px;
+  animation: bounce-in 0.5s ease-out;
+}
+
+.mood-details h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.mood-reasoning p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.mood-suggestions h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+
+.mood-suggestions ul {
+  list-style: none;
+  padding: 0;
+}
+
+.mood-suggestions li {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+  padding-left: 16px;
+  position: relative;
+}
+
+.mood-suggestions li:before {
+  content: "♪";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+}
+
+/* ── Music Discovery ── */
+.music-discovery-panel {
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 20px;
+  animation: slide-down 0.3s ease-out;
+}
+
+.discovery-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.discovery-header p {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.discovery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.discovery-card {
+  background: var(--bg-highlight);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  gap: 12px;
+  transition: border-color 0.2s, transform 0.1s;
+}
+
+.discovery-card:hover {
+  border-color: var(--border-bright);
+  transform: translateY(-1px);
+}
+
+.discovery-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.discovery-content h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.discovery-content p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.discovery-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.suggestion-tag {
+  background: var(--accent);
+  color: white;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ── Animations ── */
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bounce-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .empty-icon { font-size: 56px; line-height: 1; }

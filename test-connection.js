@@ -1,10 +1,26 @@
 // Test MongoDB Connection Script
 import { MongoClient } from 'mongodb';
+import dotenv from 'dotenv';
 
-const connectionString = 'mongodb+srv://instam:instam2007@cluster.t0hdrjh.mongodb.net/?appName=Cluster';
+// Load environment variables from current directory
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+dotenv.config({ path: join(__dirname, '.env') });
+
+const connectionString = process.env.VITE_MONGODB_URI;
+
+if (!connectionString) {
+  console.error('❌ ERROR: VITE_MONGODB_URI not found in .env file');
+  console.log('💡 Please create a .env file with your MongoDB connection string');
+  process.exit(1);
+}
 
 console.log('🔍 Testing MongoDB Connection...');
-console.log('📡 Connection String:', connectionString);
+console.log('📡 Connection String:', connectionString.replace(/:([^@]+)@/, ':****@')); // Hide password
 console.log('');
 
 async function testConnection() {

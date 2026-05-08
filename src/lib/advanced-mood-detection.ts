@@ -1,7 +1,6 @@
 // Advanced Mood Detection with AI
 // Enhanced mood analysis using multiple AI techniques
 
-import { AIServices } from './ai-services';
 
 export interface AdvancedMoodAnalysis {
   primaryMood: string;
@@ -111,8 +110,10 @@ export class AdvancedMoodDetection {
   }
 
   // Analyze mood based on colors in image
-  private static analyzeColorMood(colors: string[]): Record<string, number> {
-    const emotions: Record<string, number> = {};
+  private static analyzeColorMood(colors: string[]): { happy: number; sad: number; energetic: number; peaceful: number; romantic: number; aggressive: number; confident: number; nostalgic: number; lonely: number; party: number; attitude: number; } {
+    const emotions: { happy: number; sad: number; energetic: number; peaceful: number; romantic: number; aggressive: number; confident: number; nostalgic: number; lonely: number; party: number; attitude: number; } = {
+      happy: 0, sad: 0, energetic: 0, peaceful: 0, romantic: 0, aggressive: 0, confident: 0, nostalgic: 0, lonely: 0, party: 0, attitude: 0
+    };
     
     colors.forEach(color => {
       // Color psychology mappings
@@ -157,8 +158,10 @@ export class AdvancedMoodDetection {
   }
 
   // Analyze mood based on scene type
-  private static analyzeSceneMood(scene: string): Record<string, number> {
-    const emotions: Record<string, number> = {};
+  private static analyzeSceneMood(scene: string): { happy: number; sad: number; energetic: number; peaceful: number; romantic: number; aggressive: number; confident: number; nostalgic: number; lonely: number; party: number; attitude: number; } {
+    const emotions: { happy: number; sad: number; energetic: number; peaceful: number; romantic: number; aggressive: number; confident: number; nostalgic: number; lonely: number; party: number; attitude: number; } = {
+      happy: 0, sad: 0, energetic: 0, peaceful: 0, romantic: 0, aggressive: 0, confident: 0, nostalgic: 0, lonely: 0, party: 0, attitude: 0
+    };
 
     const sceneMoodMap: Record<string, Record<string, number>> = {
       beach: { happy: 0.4, peaceful: 0.3, romantic: 0.2, energetic: 0.1 },
@@ -173,12 +176,14 @@ export class AdvancedMoodDetection {
       social: { happy: 0.4, party: 0.3, confident: 0.2, energetic: 0.1 }
     };
 
-    return sceneMoodMap[scene] || { happy: 0.5, peaceful: 0.5 };
+    return (sceneMoodMap[scene] || { happy: 0.5, sad: 0, energetic: 0, peaceful: 0.5, romantic: 0, aggressive: 0, confident: 0, nostalgic: 0, lonely: 0, party: 0, attitude: 0 }) as { happy: number; sad: number; energetic: number; peaceful: number; romantic: number; aggressive: number; confident: number; nostalgic: number; lonely: number; party: number; attitude: number; };
   }
 
   // Analyze mood based on face detection
-  private static analyzeFaceMood(faceCount: number): Record<string, number> {
-    const emotions: Record<string, number> = {};
+  private static analyzeFaceMood(faceCount: number): { happy: number; sad: number; energetic: number; peaceful: number; romantic: number; aggressive: number; confident: number; nostalgic: number; lonely: number; party: number; attitude: number; } {
+    const emotions: { happy: number; sad: number; energetic: number; peaceful: number; romantic: number; aggressive: number; confident: number; nostalgic: number; lonely: number; party: number; attitude: number; } = {
+      happy: 0, sad: 0, energetic: 0, peaceful: 0, romantic: 0, aggressive: 0, confident: 0, nostalgic: 0, lonely: 0, party: 0, attitude: 0
+    };
 
     if (faceCount === 0) {
       emotions.lonely = 0.4;
@@ -204,8 +209,10 @@ export class AdvancedMoodDetection {
   }
 
   // Analyze mood based on objects in image
-  private static analyzeObjectMood(objects: string[]): Record<string, number> {
-    const emotions: Record<string, number> = {};
+  private static analyzeObjectMood(objects: string[]): { happy: number; sad: number; energetic: number; peaceful: number; romantic: number; aggressive: number; confident: number; nostalgic: number; lonely: number; party: number; attitude: number; } {
+    const emotions: { happy: number; sad: number; energetic: number; peaceful: number; romantic: number; aggressive: number; confident: number; nostalgic: number; lonely: number; party: number; attitude: number; } = {
+      happy: 0, sad: 0, energetic: 0, peaceful: 0, romantic: 0, aggressive: 0, confident: 0, nostalgic: 0, lonely: 0, party: 0, attitude: 0
+    };
 
     objects.forEach(object => {
       const objectLower = object.toLowerCase();
@@ -245,8 +252,10 @@ export class AdvancedMoodDetection {
   }
 
   // Analyze mood based on lighting
-  private static analyzeLightingMood(brightness: number, contrast: number): Record<string, number> {
-    const emotions: Record<string, number> = {};
+  private static analyzeLightingMood(brightness: number, contrast: number): { happy: number; sad: number; energetic: number; peaceful: number; romantic: number; aggressive: number; confident: number; nostalgic: number; lonely: number; party: number; attitude: number; } {
+    const emotions: { happy: number; sad: number; energetic: number; peaceful: number; romantic: number; aggressive: number; confident: number; nostalgic: number; lonely: number; party: number; attitude: number; } = {
+      happy: 0, sad: 0, energetic: 0, peaceful: 0, romantic: 0, aggressive: 0, confident: 0, nostalgic: 0, lonely: 0, party: 0, attitude: 0
+    };
 
     if (brightness > 0.7) {
       emotions.happy = 0.4;
@@ -280,8 +289,10 @@ export class AdvancedMoodDetection {
     faceMood: Record<string, number>;
     objectMood: Record<string, number>;
     lightingMood: Record<string, number>;
-  }): Record<string, number> {
-    const combined: Record<string, number> = {};
+  }): { happy: number; sad: number; energetic: number; peaceful: number; romantic: number; aggressive: number; confident: number; nostalgic: number; lonely: number; party: number; attitude: number; } {
+    const combined: { happy: number; sad: number; energetic: number; peaceful: number; romantic: number; aggressive: number; confident: number; nostalgic: number; lonely: number; party: number; attitude: number; } = {
+      happy: 0, sad: 0, energetic: 0, peaceful: 0, romantic: 0, aggressive: 0, confident: 0, nostalgic: 0, lonely: 0, party: 0, attitude: 0
+    };
 
     // Weight different analyses
     const weights = {

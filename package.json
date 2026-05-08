@@ -12,17 +12,24 @@
     "dev:full": "concurrently \"npm run server\" \"npm run dev\""
   },
   "dependencies": {
+    "@tensorflow-models/coco-ssd": "^2.2.3",
+    "@tensorflow-models/mobilenet": "^2.1.1",
     "@tensorflow/tfjs": "^4.22.0",
     "@types/crypto-js": "^4.2.2",
+    "clmtrackr": "^1.1.2",
     "cors": "^2.8.6",
     "crypto-js": "^4.2.0",
+    "dotenv": "^16.6.1",
     "express": "^5.2.1",
+    "face-api.js": "^0.22.2",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.14.0",
     "mongodb": "^7.2.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "react-youtube": "^10.1.0"
+    "react-youtube": "^10.1.0",
+    "save": "^2.9.0",
+    "tensorflow-models": "^0.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

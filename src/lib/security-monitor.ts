@@ -93,13 +93,21 @@ export class SecurityMonitor {
   private monitorEnvironment(): void {
     // Check for HTTPS
     if (!SecurityService.isSecureEnvironment() && window.location.hostname !== 'localhost') {
-      this.addAlert('error', 'Application running on insecure HTTP connection');
+      this.addAlert('error', 'Application running on insecure HTTP connection - data may not be safe');
     }
 
     // Check for default encryption key (browser environment)
     const encryptionKey = import.meta.env.VITE_ENCRYPTION_KEY;
     if (encryptionKey === 'default-key-change-in-production') {
-      this.addAlert('warning', 'Using default encryption key - change in production');
+      this.addAlert('error', 'CRITICAL: Using default encryption key! Change VITE_ENCRYPTION_KEY immediately');
+    }
+
+    // Check for development mode in production
+    if (import.meta.env.MODE === 'production' && window.location.hostname !== 'localhost') {
+      // Additional production checks
+      if (!encryptionKey || encryptionKey.length < 32) {
+        this.addAlert('error', 'Encryption key is too weak for production use');
+      }
     }
 
     // Monitor for console access in production (browser environment)
@@ -107,8 +115,9 @@ export class SecurityMonitor {
     if (nodeEnv === 'production') {
       const originalLog = console.log;
       console.log = (...args) => {
-        if (args.some(arg => typeof arg === 'string' && arg.includes('password'))) {
-          this.addAlert('warning', 'Potential password exposure in console');
+        if (args.some(arg => typeof arg === 'string' && 
+          (arg.includes('password') || arg.includes('secret') || arg.includes('key') || arg.includes('token')))) {
+          this.addAlert('error', 'SENSITIVE DATA EXPOSED: Password/secret detected in console logs');
         }
         originalLog.apply(console, args);
       };

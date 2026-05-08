@@ -7,12 +7,17 @@ Instam is an AI-powered music recommendation app that suggests perfect songs for
 ## ✨ Features
 
 - 🤖 **AI-Powered Recommendations** - Smart song matching based on image analysis
+- 🧠 **Human-Like Mood Prediction** - AI that understands your mood like a friend
+- 🔍 **Music Discovery** - Explore new artists, genres, and trending songs
 - 🌍 **Multi-Language Support** - English, Hindi, Marathi, Punjabi, Telugu, Tamil, Bengali
 - 🎵 **Real Market Songs** - Actual chart-topping hits with millions of views
 - 📱 **Modern UI** - Instagram-inspired design with smooth animations
 - ⬇️ **Download & Set on Photo** - Complete music integration
 - 🎨 **Beautiful Animations** - Floating music icons and dynamic backgrounds
 - 🗄️ **MongoDB Integration** - Scalable NoSQL database for user data
+- 🔒 **Advanced Security** - End-to-end encryption and security monitoring
+- 🎭 **Personality-Based Matching** - Songs that match your unique personality
+- 📊 **Behavior Learning** - AI learns from your music preferences over time
 
 ## 🚀 Quick Start
 
@@ -48,6 +53,36 @@ Instam is an AI-powered music recommendation app that suggests perfect songs for
    ```bash
    npm run dev
    ```
+
+## 🧠 AI Features
+
+### Smart Mood Prediction
+Our AI understands human emotions and predicts your current mood based on:
+- Time of day and day of week patterns
+- Recent mood history and behavior
+- Weather and environmental factors
+- Social context and activities
+
+### Music Discovery
+Explore new music tailored to your taste:
+- **Similar Artists**: Discover artists like your favorites
+- **New Genres**: Branch out to related music styles
+- **Trending Songs**: Stay updated with current hits
+- **Mood-Based**: Songs that match your current emotional state
+
+### Human-Like AI
+The AI thinks like a human music expert:
+- Understands emotional context and social situations
+- Learns from your preferences over time
+- Provides personalized recommendations with reasoning
+- Adapts to your changing moods and tastes
+
+## 🔒 Security Features
+
+- **End-to-End Encryption**: All sensitive data is encrypted
+- **Security Monitoring**: Real-time security alerts and monitoring
+- **Safe API Calls**: Protected communication with external services
+- **Data Privacy**: Your personal data stays secure and private
         project: ['./tsconfig.node.json', './tsconfig.app.json'],
         tsconfigRootDir: import.meta.dirname,
       },

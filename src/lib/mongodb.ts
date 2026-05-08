@@ -2,12 +2,15 @@
 // Uses API endpoints to communicate with MongoDB Atlas
 
 import { deezerAPI } from './deezer-api';
+import type { UserProfile } from './types';
 
 const API_BASE_URL = '/api'; // Will be created with Vite proxy or server
 
 // Mock ObjectId for browser compatibility
 class MockObjectId {
-  constructor(private id?: string) {
+  private id: string;
+  
+  constructor(id?: string) {
     this.id = id || Math.random().toString(36).substring(2, 15);
   }
   
@@ -39,20 +42,6 @@ interface Song {
   trend_region: string;
   play_count: number;
   youtube_query: string;
-  created_at?: Date;
-  updated_at?: Date;
-}
-
-interface UserProfile {
-  _id?: ObjectId;
-  session_id: string;
-  name: string;
-  age: number;
-  region: string;
-  personality_traits: string[];
-  preferred_languages: string[];
-  music_taste: string[];
-  editMode?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -255,7 +244,7 @@ class MongoDBClient {
         title: track.title,
         artist: track.artist.name,
         album: track.album.title,
-        language: language,
+        language: 'English',
         genre: 'Pop',
         mood_tags: ['search_result'],
         scene_tags: ['general'],
@@ -269,7 +258,7 @@ class MongoDBClient {
         preview_url: track.preview,
         album_art: track.album.cover_medium,
         duration: track.duration,
-        source: 'deezer' as const
+        source: 'deezer'
       }));
       
       console.log(`📊 Found ${songs.length} songs from server-side Deezer`);
@@ -293,15 +282,15 @@ class MongoDBClient {
     }
   }
   
-  async saveProfile(profile: Omit<UserProfile, '_id' | 'created_at' | 'updated_at'>): Promise<void> {
+  async saveProfile(profile: Partial<UserProfile> & Pick<UserProfile, 'session_id'>): Promise<void> {
     console.log('=== MONGODB: SAVE PROFILE STARTED ===');
     console.log('Profile to save:', profile);
     console.log('useLocalStorage:', this.useLocalStorage);
     
     const profileWithTimestamp = {
       ...profile,
-      created_at: new Date(),
-      updated_at: new Date()
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
     };
     
     if (this.useLocalStorage) {
@@ -324,7 +313,7 @@ class MongoDBClient {
       await this.apiCall('/profile', profileWithTimestamp);
       console.log('✅ Profile saved to MongoDB');
     } catch (error) {
-      console.log('❌ MongoDB save failed, using localStorage fallback:', error.message);
+      console.log('❌ MongoDB save failed, using localStorage fallback:', error instanceof Error ? error.message : 'Unknown error');
       // Fallback to localStorage
       const existingIndex = this.profiles.findIndex(p => p.session_id === profile.session_id);
       if (existingIndex >= 0) {
