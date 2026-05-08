@@ -297,5 +297,3 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
     </div>
   );
 }
-
-export default Onboarding;
