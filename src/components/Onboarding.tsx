@@ -46,7 +46,7 @@ const INTENTS = [
   { value: 'posts', label: 'Posts', emoji: '🖼️' },
 ];
 
-export default function Onboarding({ sessionId, onComplete }: Props) {
+function Onboarding({ sessionId, onComplete }: Props) {
   const [step, setStep] = useState(0);
   const [langs, setLangs] = useState<Language[]>([]);
   const [traits, setTraits] = useState<PersonalityTrait[]>([]);
@@ -297,3 +297,5 @@ export default function Onboarding({ sessionId, onComplete }: Props) {
     </div>
   );
 }
+
+export default Onboarding;
