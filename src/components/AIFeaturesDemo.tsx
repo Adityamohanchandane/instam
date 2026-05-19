@@ -172,7 +172,7 @@ export default function AIFeaturesDemo() {
         f.id === 'behavior-analysis' ? { ...f, status: 'loading' } : f
       ));
 
-      const insights = AIRecommendationEngine.getUserInsights();
+      const insights = new AIRecommendationEngine().getUserInsights();
       
       setFeatures(prev => prev.map(f => 
         f.id === 'behavior-analysis' 

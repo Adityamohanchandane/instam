@@ -3,33 +3,18 @@
 ## 🎵 About
 
 Instam is an AI-powered music recommendation app that suggests perfect songs for your social media stories based on your image mood, personality, and preferences.
-
-## ✨ Features
-
-- 🤖 **AI-Powered Recommendations** - Smart song matching based on image analysis
 - 🧠 **Human-Like Mood Prediction** - AI that understands your mood like a friend
 - 🔍 **Music Discovery** - Explore new artists, genres, and trending songs
 - 🌍 **Multi-Language Support** - English, Hindi, Marathi, Punjabi, Telugu, Tamil, Bengali
-- 🎵 **Real Market Songs** - Actual chart-topping hits with millions of views
-- 📱 **Modern UI** - Instagram-inspired design with smooth animations
-- ⬇️ **Download & Set on Photo** - Complete music integration
-- 🎨 **Beautiful Animations** - Floating music icons and dynamic backgrounds
 - 🗄️ **MongoDB Integration** - Scalable NoSQL database for user data
 - 🔒 **Advanced Security** - End-to-end encryption and security monitoring
 - 🎭 **Personality-Based Matching** - Songs that match your unique personality
-- 📊 **Behavior Learning** - AI learns from your music preferences over time
-
-## 🚀 Quick Start
-
 ### Option 1: With MongoDB (Recommended)
 
 1. **Install MongoDB**
    ```bash
    # Windows: Download and install MongoDB Community Server
    # macOS: brew install mongodb-community
-   # Ubuntu: sudo apt-get install mongodb
-   ```
-
 2. **Start MongoDB**
    ```bash
    # Windows: Start MongoDB service from Services
@@ -42,13 +27,8 @@ Instam is an AI-powered music recommendation app that suggests perfect songs for
    git clone https://github.com/Adityamohanchandane/instam.git
    cd instam
    npm install
-   ```
-
-4. **Setup MongoDB database**
    ```bash
    npm run setup-mongodb
-   ```
-
 5. **Start the development server**
    ```bash
    npm run dev

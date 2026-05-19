@@ -1,749 +1,375 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Settings, RefreshCw } from 'lucide-react';
-import { getRecommendations } from '../lib/recommender';
-import { mongodb } from '../lib/mongodb';
-import AIMusicAssistant, { type SongRecommendation } from '../lib/aiMusicAssistant';
-
-// Mock HumanLikeMoodPredictor
-const HumanLikeMoodPredictor = {
-  predictUserMood: (context: any) => ({
-    predictedMood: 'happy',
-    confidence: 0.85,
-    reasoning: ['Time of day suggests positive mood', 'Recent activity shows happy patterns'],
-    suggestions: ['Upbeat pop songs', 'Feel-good classics', 'Trending happy tracks']
-  })
-};
-import SongCard from './SongCard';
-import MoodSelector from './MoodSelector';
-import ImageUpload from './ImageUpload';
-import type { UserProfile, Song, SongWithReason, MoodType, SceneType, ColorTone, RecommendationResult } from '../lib/types';
+import { useCallback, useEffect, useState } from "react";
+import { RefreshCw, Settings } from "lucide-react";
+import { getRecommendations } from "../lib/recommender";
+import { AIRecommendationEngine } from "../lib/ai-recommendation-engine";
+import { mongodb } from "../lib/mongodb";
+import SongCard from "./SongCard";
+import MoodSelector from "./MoodSelector";
+import ImageUpload from "./ImageUpload";
+import type {
+  UserProfile,
+  Song,
+  SongWithReason,
+  MoodType,
+  SceneType,
+  ColorTone,
+  RecommendationResult,
+} from "../lib/types";
+import type { RealImageAnalysis } from "../lib/real-image-analyzer";
+import {
+  addRecentSongIds,
+  buildImageRecSeed,
+  getRecentSongIds,
+} from "../lib/rec-session";
 
 interface Props {
   userProfile: UserProfile;
   onEditProfile: () => void;
 }
 
-export default function RecommendationView({ userProfile, onEditProfile }: Props) {
+const MOOD_SEARCH_WORDS: Record<MoodType, string[]> = {
+  happy: ["happy", "feel good", "good vibes"],
+  sad: ["sad", "emotional", "heart touching"],
+  attitude: ["attitude", "swag", "bold"],
+  romantic: ["romantic", "love", "couple"],
+  energetic: ["energetic", "dance", "power"],
+  peaceful: ["peaceful", "chill", "lofi"],
+  nostalgic: ["nostalgic", "old memories", "yaad"],
+  aggressive: ["aggressive", "power", "rap"],
+  confident: ["confident", "motivation", "swag"],
+  lonely: ["lonely", "alone", "sad"],
+  party: ["party", "dance", "club"],
+};
+
+const SCENE_SEARCH_WORDS: Record<SceneType, string[]> = {
+  selfie: ["selfie", "instagram story"],
+  travel: ["travel", "journey", "safar"],
+  gym: ["gym", "workout", "motivation"],
+  night: ["night", "city lights", "dark"],
+  party: ["party", "celebration", "dance"],
+  nature: ["nature", "calm", "fresh"],
+  couple: ["couple", "love", "romantic"],
+  alone: ["alone", "lonely", "sad"],
+  friends: ["friends", "fun", "yaari"],
+  city: ["city", "urban", "drive"],
+  beach: ["beach", "sunset", "summer"],
+  morning: ["morning", "sunrise", "fresh"],
+  rain: ["rain", "barsaat", "nostalgic"],
+};
+
+const COLOR_SEARCH_WORDS: Record<ColorTone, string[]> = {
+  dark: ["dark", "night"],
+  warm: ["warm", "soft"],
+  vibrant: ["vibrant", "viral"],
+  moody: ["moody", "emotional"],
+  neon: ["neon", "club"],
+  golden: ["golden hour", "sunset"],
+  cool: ["cool", "chill"],
+};
+
+function getPreviewAudioUrl(song: SongWithReason): string {
+  if (song.preview_url) return song.preview_url;
+  const songNumber = (song.id.charCodeAt(0) % 10) + 1;
+  return `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${songNumber}.mp3`;
+}
+
+function dedupeSongs(items: Song[]): Song[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = `${item.title.toLowerCase()}_${item.artist.toLowerCase()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export default function RecommendationView({
+  userProfile,
+  onEditProfile,
+}: Props) {
   const [songs, setSongs] = useState<Song[]>([]);
   const [results, setResults] = useState<RecommendationResult | null>(null);
   const [selectedSong, setSelectedSong] = useState<string | null>(null);
   const [skippedIds, setSkippedIds] = useState<Set<string>>(new Set());
   const [recSessionId, setRecSessionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [showMoodPanel, setShowMoodPanel] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState<string>('');
+  const [showMoodPanel, setShowMoodPanel] = useState(true);
   const [hasImage, setHasImage] = useState(false);
-  const [aiAssistant] = useState(() => new AIMusicAssistant());
-  const [aiRecommendations, setAiRecommendations] = useState<SongRecommendation[]>([]);
-  const [showAIRecommendations, setShowAIRecommendations] = useState(false);
-  const [showMusicDiscovery, setShowMusicDiscovery] = useState(false);
-  const [discoveryResults, setDiscoveryResults] = useState<any[]>([]);
-  const [showMoodPrediction, setShowMoodPrediction] = useState(false);
-  const [smartMoodPrediction, setSmartMoodPrediction] = useState<any>(null);
+  const [imageAnalysis, setImageAnalysis] = useState<RealImageAnalysis | null>(null);
+  const [aiEngine] = useState(() => new AIRecommendationEngine());
 
-  const [imageMood, setImageMood] = useState<MoodType>('happy');
-  const [imageScene, setImageScene] = useState<SceneType>('selfie');
-  const [imageColorTone, setImageColorTone] = useState<ColorTone>('warm');
-  const [userMoodOverride, setUserMoodOverride] = useState<MoodType | ''>('');
+  const [imageMood, setImageMood] = useState<MoodType>("happy");
+  const [imageScene, setImageScene] = useState<SceneType>("selfie");
+  const [imageColorTone, setImageColorTone] = useState<ColorTone>("warm");
+  const [userMoodOverride, setUserMoodOverride] = useState<MoodType | "">("");
+
+  const primaryTrait = userProfile.personality_traits?.[0];
 
   useEffect(() => {
     loadSongs();
-    // Generate smart mood prediction on load
-    generateSmartMoodPrediction();
   }, []);
 
   async function loadSongs() {
     try {
-      console.log('Loading songs from MongoDB...');
       await mongodb.connect();
-      const songs = await mongodb.getSongs(50);
-      
-      if (songs && songs.length > 0) {
-        console.log(`✅ Loaded ${songs.length} songs from MongoDB`);
-        setSongs(songs);
-        return;
+      const loadedSongs = await mongodb.getSongs(50);
+      if (loadedSongs.length > 0) {
+        setSongs(loadedSongs);
       }
-      
-      console.log('No songs in MongoDB, using local database as final fallback...');
-      const mockSongs = [
-        // English International Hits
-        {
-          id: 'en_1',
-          title: 'Shape of You',
-          artist: 'Ed Sheeran',
-          language: 'English',
-          genre: 'Pop',
-          mood_tags: ['happy', 'energetic', 'party'],
-          scene_tags: ['party', 'friends', 'celebration'],
-          personality_tags: ['chill', 'social', 'confident'],
-          color_tone_tags: ['vibrant', 'warm', 'golden'],
-          energy_level: 7,
-          is_trending: true,
-          trend_region: 'Global',
-          play_count: 3000000000,
-          youtube_query: 'shape of you ed sheeran official'
-        },
-        {
-          id: 'en_2',
-          title: 'Blinding Lights',
-          artist: 'The Weeknd',
-          language: 'English',
-          genre: 'Pop',
-          mood_tags: ['energetic', 'confident', 'party'],
-          scene_tags: ['night', 'city', 'drive'],
-          personality_tags: ['confident', 'energetic', 'attitude'],
-          color_tone_tags: ['neon', 'dark', 'vibrant'],
-          energy_level: 9,
-          is_trending: true,
-          trend_region: 'Global',
-          play_count: 3500000000,
-          youtube_query: 'blinding lights the weeknd official'
-        },
-        {
-          id: 'en_3',
-          title: 'Someone Like You',
-          artist: 'Adele',
-          language: 'English',
-          genre: 'Soul',
-          mood_tags: ['romantic', 'emotional', 'sad'],
-          scene_tags: ['couple', 'night', 'alone'],
-          personality_tags: ['romantic', 'emotional', 'soft'],
-          color_tone_tags: ['warm', 'moody', 'golden'],
-          energy_level: 2,
-          is_trending: false,
-          trend_region: 'Global',
-          play_count: 2000000000,
-          youtube_query: 'someone like you adele official'
-        },
-        
-        // Bollywood Blockbuster Songs
-        {
-          id: 'hi_1',
-          title: 'Tum Hi Ho',
-          artist: 'Arijit Singh',
-          language: 'Hindi',
-          genre: 'Romantic',
-          mood_tags: ['romantic', 'emotional', 'peaceful'],
-          scene_tags: ['couple', 'night', 'rain'],
-          personality_tags: ['romantic', 'emotional', 'soft'],
-          color_tone_tags: ['warm', 'moody', 'golden'],
-          energy_level: 4,
-          is_trending: false,
-          trend_region: 'India',
-          play_count: 1500000000,
-          youtube_query: 'tum hi ho aashiqui 2 arijit singh official'
-        },
-        {
-          id: 'hi_2',
-          title: 'Kala Chashma',
-          artist: 'Badshah, Amar Arshi',
-          language: 'Hindi',
-          genre: 'Party',
-          mood_tags: ['energetic', 'happy', 'party'],
-          scene_tags: ['party', 'celebration', 'wedding'],
-          personality_tags: ['confident', 'energetic', 'social'],
-          color_tone_tags: ['vibrant', 'warm', 'golden'],
-          energy_level: 9,
-          is_trending: true,
-          trend_region: 'India',
-          play_count: 1200000000,
-          youtube_query: 'kala chashma baar baar dekho badshah official'
-        },
-        {
-          id: 'hi_3',
-          title: 'Channa Mereya',
-          artist: 'Arijit Singh',
-          language: 'Hindi',
-          genre: 'Sad Romantic',
-          mood_tags: ['sad', 'emotional', 'melancholic'],
-          scene_tags: ['alone', 'night', 'wedding'],
-          personality_tags: ['emotional', 'lonely', 'soft'],
-          color_tone_tags: ['moody', 'dark', 'cool'],
-          energy_level: 2,
-          is_trending: false,
-          trend_region: 'India',
-          play_count: 800000000,
-          youtube_query: 'channa mereya ae dil hai mushkil arijit singh official'
-        },
-        {
-          id: 'hi_4',
-          title: 'Garmi',
-          artist: 'Badshah, Neha Kakkar',
-          language: 'Hindi',
-          genre: 'Party',
-          mood_tags: ['energetic', 'happy', 'party'],
-          scene_tags: ['party', 'street', 'summer'],
-          personality_tags: ['attitude', 'confident', 'social'],
-          color_tone_tags: ['vibrant', 'warm', 'neon'],
-          energy_level: 8,
-          is_trending: true,
-          trend_region: 'India',
-          play_count: 600000000,
-          youtube_query: 'garmi street dancer 3d badshah official'
-        },
-        {
-          id: 'hi_5',
-          title: 'Mere Rashke Qamar',
-          artist: 'Nusrat Fateh Ali Khan, Rahat Fateh Ali Khan',
-          language: 'Hindi',
-          genre: 'Sufi',
-          mood_tags: ['romantic', 'emotional', 'peaceful'],
-          scene_tags: ['couple', 'nature', 'travel'],
-          personality_tags: ['romantic', 'spiritual', 'emotional'],
-          color_tone_tags: ['warm', 'golden', 'moody'],
-          energy_level: 5,
-          is_trending: false,
-          trend_region: 'India',
-          play_count: 1000000000,
-          youtube_query: 'mere rashke qamar rahat fateh ali khan official'
-        },
-        
-        // Marathi Superhits
-        {
-          id: 'mr_1',
-          title: 'Zingaat',
-          artist: 'Ajay-Atul',
-          language: 'Marathi',
-          genre: 'Folk',
-          mood_tags: ['energetic', 'happy', 'party'],
-          scene_tags: ['party', 'friends', 'celebration'],
-          personality_tags: ['energetic', 'social', 'confident'],
-          color_tone_tags: ['vibrant', 'warm', 'golden'],
-          energy_level: 10,
-          is_trending: true,
-          trend_region: 'Maharashtra',
-          play_count: 500000000,
-          youtube_query: 'zingaat sairat ajay atul official'
-        },
-        {
-          id: 'mr_2',
-          title: 'Mala Jau Dya Na Ghari',
-          artist: 'Sonu Nigam, Shreya Ghoshal',
-          language: 'Marathi',
-          genre: 'Romantic',
-          mood_tags: ['romantic', 'peaceful', 'happy'],
-          scene_tags: ['couple', 'nature', 'travel'],
-          personality_tags: ['romantic', 'soft', 'peaceful'],
-          color_tone_tags: ['warm', 'golden', 'vibrant'],
-          energy_level: 6,
-          is_trending: false,
-          trend_region: 'Maharashtra',
-          play_count: 300000000,
-          youtube_query: 'mala jau dya na ghari sonu nigam official'
-        },
-        {
-          id: 'mr_3',
-          title: 'Apsara Aali',
-          artist: 'Ajay-Atul',
-          language: 'Marathi',
-          genre: 'Folk',
-          mood_tags: ['energetic', 'happy', 'celebration'],
-          scene_tags: ['party', 'wedding', 'celebration'],
-          personality_tags: ['energetic', 'social', 'confident'],
-          color_tone_tags: ['vibrant', 'warm', 'golden'],
-          energy_level: 9,
-          is_trending: true,
-          trend_region: 'Maharashtra',
-          play_count: 200000000,
-          youtube_query: 'apsara aali natrang ajay atul official'
-        },
-        
-        // Punjabi Chartbusters
-        {
-          id: 'pa_1',
-          title: 'Brown Munde',
-          artist: 'AP Dhillon, Gurinder Gill',
-          language: 'Punjabi',
-          genre: 'Hip Hop',
-          mood_tags: ['attitude', 'confident', 'energetic'],
-          scene_tags: ['street', 'party', 'friends'],
-          personality_tags: ['attitude', 'gangster', 'confident'],
-          color_tone_tags: ['dark', 'neon', 'vibrant'],
-          energy_level: 9,
-          is_trending: true,
-          trend_region: 'North India',
-          play_count: 800000000,
-          youtube_query: 'brown munde ap dhillon official'
-        },
-        {
-          id: 'pa_2',
-          title: 'Laung Laachi',
-          artist: 'Mannat Noor, Babbal Rai',
-          language: 'Punjabi',
-          genre: 'Romantic',
-          mood_tags: ['romantic', 'happy', 'peaceful'],
-          scene_tags: ['couple', 'wedding', 'travel'],
-          personality_tags: ['romantic', 'soft', 'peaceful'],
-          color_tone_tags: ['warm', 'golden', 'vibrant'],
-          energy_level: 6,
-          is_trending: false,
-          trend_region: 'North India',
-          play_count: 200000000,
-          youtube_query: 'laung laachi mannat noor official'
-        }
+    } catch (error) {
+      console.log(
+        "Song catalog will use local fallback:",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+    }
+  }
+
+  const buildSearchQueries = useCallback(
+    (mood: MoodType, scene: SceneType, colorTone: ColorTone) => {
+      const preferredLanguage = userProfile.preferred_languages?.[0] || "Hindi";
+      const favoriteArtist = userProfile.favorite_artists?.[0];
+      const favoriteGenre = userProfile.favorite_genres?.[0];
+      const moodWords = MOOD_SEARCH_WORDS[mood] || [mood];
+      const sceneWords = SCENE_SEARCH_WORDS[scene] || [scene];
+      const colorWords = COLOR_SEARCH_WORDS[colorTone] || [colorTone];
+
+      const queries = [
+        favoriteArtist ? `${favoriteArtist} ${moodWords[0]} song` : "",
+        favoriteGenre
+          ? `${preferredLanguage} ${favoriteGenre} ${moodWords[0]} song`
+          : "",
+        `${preferredLanguage} ${moodWords[0]} ${sceneWords[0]} instagram song`,
+        `${preferredLanguage} ${sceneWords[0]} ${colorWords[0]} reels song`,
+        `${preferredLanguage} viral ${moodWords[1] || moodWords[0]} song`,
       ];
-      setSongs(mockSongs);
-    } catch (error) {
-      console.error('Failed to load songs:', error);
-    }
-  }
 
-  const generateRecommendations = useCallback(async (
-    songsData: Song[],
-    moodData: MoodType,
-    sceneData: SceneType,
-    colorData: ColorTone,
-    overrideData: MoodType | '',
-    skipSet: Set<string>
-  ): Promise<Song[]> => {
-    // Mock recommendation logic
-    const mockSongs = [
-      {
-        id: 'en_1',
-        title: 'Someone Like You',
-        artist: 'Adele',
-        language: 'English',
-        genre: 'Soul',
-        mood_tags: ['romantic', 'emotional', 'sad'],
-        scene_tags: ['couple', 'night', 'alone'],
-        personality_tags: ['romantic', 'emotional', 'soft'],
-        color_tone_tags: ['warm', 'moody', 'golden'],
-        energy_level: 2,
-        is_trending: false,
-        trend_region: 'Global',
-        play_count: 2000000000,
-        youtube_query: 'someone like you adele official'
-      },
-        
-        // Bollywood Blockbuster Songs
-        {
-          id: 'hi_1',
-          title: 'Tum Hi Ho',
-          artist: 'Arijit Singh',
-          language: 'Hindi',
-          genre: 'Romantic',
-          mood_tags: ['romantic', 'emotional', 'peaceful'],
-          scene_tags: ['couple', 'night', 'rain'],
-          personality_tags: ['romantic', 'emotional', 'soft'],
-          color_tone_tags: ['warm', 'moody', 'golden'],
-          energy_level: 4,
-          is_trending: false,
-          trend_region: 'India',
-          play_count: 1500000000,
-          youtube_query: 'tum hi ho aashiqui 2 arijit singh official'
-        },
-        {
-          id: 'hi_2',
-          title: 'Kala Chashma',
-          artist: 'Badshah, Amar Arshi',
-          language: 'Hindi',
-          genre: 'Party',
-          mood_tags: ['energetic', 'happy', 'party'],
-          scene_tags: ['party', 'celebration', 'wedding'],
-          personality_tags: ['confident', 'energetic', 'social'],
-          color_tone_tags: ['vibrant', 'warm', 'golden'],
-          energy_level: 9,
-          is_trending: true,
-          trend_region: 'India',
-          play_count: 1200000000,
-          youtube_query: 'kala chashma baar baar dekho badshah official'
-        },
-        {
-          id: 'hi_3',
-          title: 'Channa Mereya',
-          artist: 'Arijit Singh',
-          language: 'Hindi',
-          genre: 'Sad Romantic',
-          mood_tags: ['sad', 'emotional', 'melancholic'],
-          scene_tags: ['alone', 'night', 'wedding'],
-          personality_tags: ['emotional', 'lonely', 'soft'],
-          color_tone_tags: ['moody', 'dark', 'cool'],
-          energy_level: 2,
-          is_trending: false,
-          trend_region: 'India',
-          play_count: 800000000,
-          youtube_query: 'channa mereya ae dil hai mushkil arijit singh official'
-        },
-        {
-          id: 'hi_4',
-          title: 'Garmi',
-          artist: 'Badshah, Neha Kakkar',
-          language: 'Hindi',
-          genre: 'Party',
-          mood_tags: ['energetic', 'happy', 'party'],
-          scene_tags: ['party', 'street', 'summer'],
-          personality_tags: ['attitude', 'confident', 'social'],
-          color_tone_tags: ['vibrant', 'warm', 'neon'],
-          energy_level: 8,
-          is_trending: true,
-          trend_region: 'India',
-          play_count: 600000000,
-          youtube_query: 'garmi street dancer 3d badshah official'
-        },
-        {
-          id: 'hi_5',
-          title: 'Mere Rashke Qamar',
-          artist: 'Nusrat Fateh Ali Khan, Rahat Fateh Ali Khan',
-          language: 'Hindi',
-          genre: 'Sufi',
-          mood_tags: ['romantic', 'emotional', 'peaceful'],
-          scene_tags: ['couple', 'nature', 'travel'],
-          personality_tags: ['romantic', 'spiritual', 'emotional'],
-          color_tone_tags: ['warm', 'golden', 'moody'],
-          energy_level: 5,
-          is_trending: false,
-          trend_region: 'India',
-          play_count: 1000000000,
-          youtube_query: 'mere rashke qamar rahat fateh ali khan official'
-        },
-        
-        // Marathi Superhits
-        {
-          id: 'mr_1',
-          title: 'Zingaat',
-          artist: 'Ajay-Atul',
-          language: 'Marathi',
-          genre: 'Folk',
-          mood_tags: ['energetic', 'happy', 'party'],
-          scene_tags: ['party', 'friends', 'celebration'],
-          personality_tags: ['energetic', 'social', 'confident'],
-          color_tone_tags: ['vibrant', 'warm', 'golden'],
-          energy_level: 10,
-          is_trending: true,
-          trend_region: 'Maharashtra',
-          play_count: 500000000,
-          youtube_query: 'zingaat sairat ajay atul official'
-        },
-        {
-          id: 'mr_2',
-          title: 'Mala Jau Dya Na Ghari',
-          artist: 'Sonu Nigam, Shreya Ghoshal',
-          language: 'Marathi',
-          genre: 'Romantic',
-          mood_tags: ['romantic', 'peaceful', 'happy'],
-          scene_tags: ['couple', 'nature', 'travel'],
-          personality_tags: ['romantic', 'soft', 'peaceful'],
-          color_tone_tags: ['warm', 'golden', 'vibrant'],
-          energy_level: 6,
-          is_trending: false,
-          trend_region: 'Maharashtra',
-          play_count: 300000000,
-          youtube_query: 'mala jau dya na ghari sonu nigam official'
-        },
-        {
-          id: 'mr_3',
-          title: 'Apsara Aali',
-          artist: 'Ajay-Atul',
-          language: 'Marathi',
-          genre: 'Folk',
-          mood_tags: ['energetic', 'happy', 'celebration'],
-          scene_tags: ['party', 'wedding', 'celebration'],
-          personality_tags: ['energetic', 'social', 'confident'],
-          color_tone_tags: ['vibrant', 'warm', 'golden'],
-          energy_level: 9,
-          is_trending: true,
-          trend_region: 'Maharashtra',
-          play_count: 200000000,
-          youtube_query: 'apsara aali natrang ajay atul official'
-        },
-        
-        // Punjabi Chartbusters
-        {
-          id: 'pa_1',
-          title: 'Brown Munde',
-          artist: 'AP Dhillon, Gurinder Gill',
-          language: 'Punjabi',
-          genre: 'Hip Hop',
-          mood_tags: ['attitude', 'confident', 'energetic'],
-          scene_tags: ['street', 'party', 'friends'],
-          personality_tags: ['attitude', 'gangster', 'confident'],
-          color_tone_tags: ['dark', 'neon', 'vibrant'],
-          energy_level: 9,
-          is_trending: true,
-          trend_region: 'North India',
-          play_count: 800000000,
-          youtube_query: 'brown munde ap dhillon official'
-        },
-        {
-          id: 'pa_2',
-          title: 'Laung Laachi',
-          artist: 'Mannat Noor, Babbal Rai',
-          language: 'Punjabi',
-          genre: 'Romantic',
-          mood_tags: ['romantic', 'happy', 'peaceful'],
-          scene_tags: ['couple', 'celebration', 'wedding'],
-          personality_tags: ['romantic', 'social', 'happy'],
-          color_tone_tags: ['warm', 'vibrant', 'golden'],
-          energy_level: 6,
-          is_trending: false,
-          trend_region: 'North India',
-          play_count: 1400000000,
-          youtube_query: 'laung laachi mannat noor official'
-        },
-        {
-          id: 'pa_3',
-          title: 'Lehanga',
-          artist: 'Jass Manak',
-          language: 'Punjabi',
-          genre: 'Romantic',
-          mood_tags: ['romantic', 'happy', 'peaceful'],
-          scene_tags: ['couple', 'nature', 'village'],
-          personality_tags: ['romantic', 'soft', 'happy'],
-          color_tone_tags: ['warm', 'vibrant', 'golden'],
-          energy_level: 5,
-          is_trending: true,
-          trend_region: 'North India',
-          play_count: 900000000,
-          youtube_query: 'lehanga jass manak official'
-        },
-        
-        // Telugu Blockbusters
-        {
-          id: 'te_1',
-          title: 'Arabic Kuthu',
-          artist: 'Anirudh Ravichander, Jonita Gandhi',
-          language: 'Telugu',
-          genre: 'Mass',
-          mood_tags: ['energetic', 'party', 'confident'],
-          scene_tags: ['party', 'celebration', 'friends'],
-          personality_tags: ['energetic', 'confident', 'social'],
-          color_tone_tags: ['vibrant', 'neon', 'warm'],
-          energy_level: 8,
-          is_trending: true,
-          trend_region: 'South India',
-          play_count: 600000000,
-          youtube_query: 'arabic kuthu beast anirudh official'
-        },
-        {
-          id: 'te_2',
-          title: 'Samajavaragamana',
-          artist: 'Sid Sriram',
-          language: 'Telugu',
-          genre: 'Classical',
-          mood_tags: ['romantic', 'peaceful', 'emotional'],
-          scene_tags: ['couple', 'nature', 'sunset'],
-          personality_tags: ['romantic', 'soft', 'spiritual'],
-          color_tone_tags: ['warm', 'golden', 'moody'],
-          energy_level: 4,
-          is_trending: false,
-          trend_region: 'South India',
-          play_count: 400000000,
-          youtube_query: 'samajavaragamana ala vaikunthapurramuloo sid sriram official'
-        },
-        {
-          id: 'te_3',
-          title: 'Butta Bomma',
-          artist: 'Armaan Malik',
-          language: 'Telugu',
-          genre: 'Romantic',
-          mood_tags: ['romantic', 'happy', 'energetic'],
-          scene_tags: ['couple', 'party', 'celebration'],
-          personality_tags: ['romantic', 'social', 'happy'],
-          color_tone_tags: ['vibrant', 'warm', 'golden'],
-          energy_level: 7,
-          is_trending: true,
-          trend_region: 'South India',
-          play_count: 700000000,
-          youtube_query: 'butta bomma ala vaikunthapurramuloo armaan malik official'
-        },
-        
-        // Tamil Superhits
-        {
-          id: 'ta_1',
-          title: 'Vaathi Coming',
-          artist: 'Anirudh Ravichander',
-          language: 'Tamil',
-          genre: 'Mass',
-          mood_tags: ['attitude', 'energetic', 'confident'],
-          scene_tags: ['street', 'party', 'celebration'],
-          personality_tags: ['attitude', 'gangster', 'confident'],
-          color_tone_tags: ['dark', 'neon', 'vibrant'],
-          energy_level: 9,
-          is_trending: true,
-          trend_region: 'South India',
-          play_count: 1000000000,
-          youtube_query: 'vaathi coming master anirudh official'
-        },
-        {
-          id: 'ta_2',
-          title: 'Enna Sona',
-          artist: 'A.R. Rahman',
-          language: 'Tamil',
-          genre: 'Romantic',
-          mood_tags: ['romantic', 'emotional', 'peaceful'],
-          scene_tags: ['couple', 'nature', 'travel'],
-          personality_tags: ['romantic', 'emotional', 'soft'],
-          color_tone_tags: ['warm', 'golden', 'moody'],
-          energy_level: 5,
-          is_trending: false,
-          trend_region: 'South India',
-          play_count: 500000000,
-          youtube_query: 'enna sona ok jaanu ar rahman official'
-        },
-        {
-          id: 'ta_3',
-          title: 'Kutty Pattas',
-          artist: 'Anirudh Ravichander',
-          language: 'Tamil',
-          genre: 'Party',
-          mood_tags: ['energetic', 'happy', 'party'],
-          scene_tags: ['party', 'friends', 'celebration'],
-          personality_tags: ['energetic', 'social', 'confident'],
-          color_tone_tags: ['vibrant', 'neon', 'warm'],
-          energy_level: 8,
-          is_trending: true,
-          trend_region: 'South India',
-          play_count: 400000000,
-          youtube_query: 'kutty pattas anirudh official'
-        },
-        
-        // Bengali Hits
-        {
-          id: 'bn_1',
-          title: 'Ekta Chilo',
-          artist: 'Shironamhin',
-          language: 'Bengali',
-          genre: 'Rock',
-          mood_tags: ['sad', 'emotional', 'melancholic'],
-          scene_tags: ['alone', 'night', 'rain'],
-          personality_tags: ['emotional', 'lonely', 'soft'],
-          color_tone_tags: ['moody', 'dark', 'cool'],
-          energy_level: 3,
-          is_trending: false,
-          trend_region: 'East India',
-          play_count: 100000000,
-          youtube_query: 'ekta chilo shironamhin official'
-        },
-        {
-          id: 'bn_2',
-          title: 'Mon Boleche',
-          artist: 'Arijit Singh',
-          language: 'Bengali',
-          genre: 'Romantic',
-          mood_tags: ['romantic', 'happy', 'peaceful'],
-          scene_tags: ['couple', 'nature', 'travel'],
-          personality_tags: ['romantic', 'soft', 'happy'],
-          color_tone_tags: ['warm', 'vibrant', 'golden'],
-          energy_level: 6,
-          is_trending: true,
-          trend_region: 'East India',
-          play_count: 200000000,
-          youtube_query: 'mon boleche arijit singh bengali official'
-        },
-        {
-          id: 'bn_3',
-          title: 'Keno Je Toke',
-          artist: 'Arijit Singh',
-          language: 'Bengali',
-          genre: 'Romantic',
-          mood_tags: ['romantic', 'emotional', 'peaceful'],
-          scene_tags: ['couple', 'night', 'rain'],
-          personality_tags: ['romantic', 'emotional', 'soft'],
-          color_tone_tags: ['warm', 'moody', 'golden'],
-          energy_level: 4,
-          is_trending: false,
-          trend_region: 'East India',
-          play_count: 150000000,
-          youtube_query: 'keno je toke arijit singh bengali official'
+      return Array.from(new Set(queries.filter(Boolean))).slice(0, 5);
+    },
+    [
+      userProfile.favorite_artists,
+      userProfile.favorite_genres,
+      userProfile.preferred_languages,
+    ],
+  );
+
+  const generateSongMatches = useCallback(
+    async function generateSongMatches(
+      availableSongs: Song[],
+      mood: MoodType,
+      scene: SceneType,
+      colorTone: ColorTone,
+      userMood: MoodType | "",
+      freshSkipped: Set<string>,
+    ) {
+      setLoading(true);
+      setLoadingMessage('Searching for perfect songs...');
+      try {
+        const finalMood = (userMood || mood) as MoodType;
+        console.log("🎵 Generating song matches for mood:", finalMood);
+
+        const queries = buildSearchQueries(finalMood, scene, colorTone);
+        console.log("🔍 Search queries:", queries);
+
+        const allResults: Song[] = [];
+        const seenIds = new Set<string>();
+
+        const preferredLanguage = userProfile.preferred_languages?.[0] || "Hindi";
+        setLoadingMessage('Fetching songs from music database...');
+        for (const q of queries) {
+          if (allResults.length >= 30) break;
+          const results = await mongodb.searchSongs(q, preferredLanguage, 10);
+          for (const song of results) {
+            if (!seenIds.has(song.id)) {
+              seenIds.add(song.id);
+              allResults.push(song);
+            }
+          }
         }
-    ];
-    
-    return mockSongs;
-  }, []);
 
-  // Generate smart mood prediction using human-like AI
-  async function generateSmartMoodPrediction() {
-    try {
-      console.log('🧠 Generating smart mood prediction...');
-      
-      const now = new Date();
-      const context = {
-        timeOfDay: now.getHours(),
-        dayOfWeek: now.getDay(),
-        recentMoods: ['happy', 'energetic', 'romantic'], // Mock recent moods
-        weather: 'sunny', // Could be fetched from API
-        location: 'home', // Could be detected
-        socialActivity: 'relaxing' // Could be inferred
-      };
+        if (allResults.length === 0) {
+          console.log("⚠️ No songs found from search, using local songs");
+          setLoadingMessage('Loading local song library...');
+          const localSongs = await mongodb.getSongs(20);
+          allResults.push(...localSongs);
+        }
 
-      const prediction = HumanLikeMoodPredictor.predictUserMood(context);
-      setSmartMoodPrediction(prediction);
-      
-      console.log('✅ Smart mood prediction:', prediction);
-    } catch (error) {
-      console.error('❌ Smart mood prediction failed:', error);
-    }
-  }
-
-  // Generate music discovery recommendations
-  async function generateMusicDiscovery() {
-    try {
-      console.log('🔍 Generating music discovery...');
-      
-      // Get user's favorite genres and artists
-      const favoriteGenres = userProfile.favorite_genres || [];
-      const favoriteArtists = userProfile.favorite_artists || [];
-      
-      // Generate discovery based on user preferences
-      const discoveries = [];
-      
-      // Discover similar artists
-      if (favoriteArtists.length > 0) {
-        discoveries.push({
-          type: 'similar_artist',
-          title: 'Artists Like ' + favoriteArtists[0],
-          description: 'Discover new artists similar to your favorites',
-          suggestions: ['New artist discovery 1', 'New artist discovery 2', 'New artist discovery 3']
-        });
-      }
-      
-      // Discover new genres
-      if (favoriteGenres.length > 0) {
-        const relatedGenres = {
-          'Pop': ['Indie Pop', 'Synth-pop', 'K-pop'],
-          'Hip-Hop': ['Trap', 'R&B', 'Rap'],
-          'Romantic': ['Ballads', 'Love Songs', 'R&B'],
-          'Sad': ['Indie', 'Alternative', 'Folk'],
-          'Dance': ['EDM', 'Electronic', 'House']
+        const input = {
+          userProfile,
+          imageMood: mood,
+          imageScene: scene,
+          imageColorTone: colorTone,
+          userMoodOverride: userMood,
         };
-        
-        const related = relatedGenres[favoriteGenres[0] as keyof typeof relatedGenres] || ['Various'];
-        discoveries.push({
-          type: 'new_genre',
-          title: 'Explore ' + related[0],
-          description: 'Branch out from ' + favoriteGenres[0] + ' to ' + related[0],
-          suggestions: related.slice(0, 3)
-        });
-      }
-      
-      // Trending discoveries
-      discoveries.push({
-        type: 'trending',
-        title: 'What\'s Hot Right Now',
-        description: 'Latest trending songs you might love',
-        suggestions: ['Trending song 1', 'Trending song 2', 'Trending song 3']
-      });
-      
-      // Mood-based discoveries
-      discoveries.push({
-        type: 'mood_based',
-        title: 'Songs for Your Mood',
-        description: 'Discover music that matches how you feel',
-        suggestions: ['Mood song 1', 'Mood song 2', 'Mood song 3']
-      });
-      
-      setDiscoveryResults(discoveries);
-      console.log('✅ Music discovery generated:', discoveries);
-    } catch (error) {
-      console.error('❌ Music discovery failed:', error);
-    }
-  }
 
-  function handleImageAnalyzed(mood: MoodType, scene: SceneType, colorTone: ColorTone, _url: string) {
+        setLoadingMessage('AI is analyzing your preferences...');
+        // Use basic recommender
+        const basicRecs = getRecommendations(
+          allResults,
+          input,
+          freshSkipped,
+          getRecentSongIds(),
+        );
+        
+        setLoadingMessage('Applying advanced AI recommendation engine...');
+        // Enhance with AI engine
+        const recentSongIds = getRecentSongIds();
+        const imageSeed = buildImageRecSeed(imageAnalysis || undefined);
+
+        const enhancedRecs = await aiEngine.getRecommendations({
+          mood: finalMood,
+          scene,
+          colorTone,
+          userProfile,
+          songs: allResults,
+          skippedIds: freshSkipped,
+          recentSongIds,
+          imageSeed,
+          imageAnalysis: imageAnalysis || undefined,
+        });
+
+        setLoadingMessage('Finalizing recommendations...');
+        // Merge results
+        const mergedSongs: SongWithReason[] = basicRecs.songs.map(song => {
+          const enhanced = enhancedRecs.songs.find(s => s.id === song.id);
+          return {
+            ...song,
+            matchScore: enhanced?.matchScore || song.matchScore,
+            reason: enhanced?.reason || song.reason,
+            label: enhanced?.label || song.label
+          };
+        });
+
+        mergedSongs.sort((a, b) => b.matchScore - a.matchScore);
+
+        const finalRecs: RecommendationResult = {
+          songs: mergedSongs.slice(0, 8),
+          safeChoice: mergedSongs.find(s => s.label === 'safe') || mergedSongs[0],
+          uniquePick: mergedSongs.find(s => s.label === 'unique') || mergedSongs[1] || mergedSongs[0]
+        };
+
+        setResults(finalRecs);
+        addRecentSongIds(finalRecs.songs.map((s) => s.id));
+        setShowMoodPanel(true);
+
+        try {
+          const sessionId = await mongodb.saveSession({
+            session_id: userProfile.session_id,
+            image_mood: mood,
+            image_scene: scene,
+            image_color_tone: colorTone,
+            user_mood_override: userMood,
+            recommended_song_ids: finalRecs.songs.map((song) => song.id),
+            safe_choice_id: finalRecs.safeChoice.id,
+            unique_pick_id: finalRecs.uniquePick.id,
+          });
+          if (sessionId) setRecSessionId(sessionId);
+        } catch (error) {
+          console.log("Recommendation session saved locally only:", error);
+        }
+      } catch (error) {
+        console.log("Song matching fallback failed:", error);
+      } finally {
+        setLoading(false);
+        setLoadingMessage('');
+      }
+    },
+    [buildSearchQueries, songs, userProfile, aiEngine, imageAnalysis],
+  );
+
+  function handleImageAnalyzedWithAI(
+    mood: MoodType,
+    scene: SceneType,
+    colorTone: ColorTone,
+    _url: string,
+    analysis?: RealImageAnalysis,
+  ) {
+    const freshSkipped = new Set<string>();
     setImageMood(mood);
     setImageScene(scene);
     setImageColorTone(colorTone);
     setHasImage(true);
-    generateRecommendations(songs, mood, scene, colorTone, userMoodOverride, skippedIds);
+    setSkippedIds(freshSkipped);
+    setImageAnalysis(analysis || null);
+    
+    console.log('📊 Image analysis received:', {
+      mood,
+      scene,
+      colorTone,
+      hasAnalysis: !!analysis,
+      confidence: analysis?.mood.confidence,
+      objectsDetected: analysis?.objects.length,
+      aiProvider: analysis?.aiProvider
+    });
+    
+    generateSongMatches(
+      songs,
+      mood,
+      scene,
+      colorTone,
+      userMoodOverride,
+      freshSkipped,
+    );
+  }
+
+  function handleRefresh() {
+    const refreshSkipped = new Set(skippedIds);
+    if (results?.songs) {
+      for (const song of results.songs) {
+        refreshSkipped.add(song.id);
+      }
+    }
+    setSkippedIds(refreshSkipped);
+    generateSongMatches(
+      songs,
+      imageMood,
+      imageScene,
+      imageColorTone,
+      userMoodOverride,
+      refreshSkipped,
+    );
+  }
+
+  function handleMoodChange(mood: MoodType | "") {
+    setUserMoodOverride(mood);
+    if (hasImage) {
+      generateSongMatches(
+        songs,
+        imageMood,
+        imageScene,
+        imageColorTone,
+        mood,
+        skippedIds,
+      );
+    }
+  }
+
+  function handleSceneChange(scene: SceneType) {
+    setImageScene(scene);
+    if (hasImage) {
+      generateSongMatches(
+        songs,
+        imageMood,
+        scene,
+        imageColorTone,
+        userMoodOverride,
+        skippedIds,
+      );
+    }
+  }
+
+  function handleColorChange(color: ColorTone) {
+    setImageColorTone(color);
+    if (hasImage) {
+      generateSongMatches(
+        songs,
+        imageMood,
+        imageScene,
+        color,
+        userMoodOverride,
+        skippedIds,
+      );
+    }
   }
 
   async function handleSkip(song: SongWithReason) {
@@ -751,323 +377,197 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
     newSkipped.add(song.id);
     setSkippedIds(newSkipped);
 
-    console.log('Song skipped:', song.title);
-    
-    // Save feedback to MongoDB
     if (recSessionId) {
       try {
         await mongodb.saveFeedback({
           session_id: userProfile.session_id,
           song_id: song.id,
           recommendation_session_id: recSessionId,
-          action: 'skipped',
+          action: "skipped",
         });
-        console.log('✅ Skip feedback saved to MongoDB');
       } catch (error) {
-        console.log('⚠️ Could not save skip feedback:', error instanceof Error ? error.message : 'Unknown error');
+        console.log("Skip feedback saved locally only:", error);
       }
     }
 
-    // Replace skipped song with next best
-    const newResults = getRecommendations(songs, {
-      userProfile, imageMood, imageScene, imageColorTone, userMoodOverride,
-    }, newSkipped);
+    const newResults = getRecommendations(
+      songs,
+      {
+        userProfile,
+        imageMood,
+        imageScene,
+        imageColorTone,
+        userMoodOverride,
+      },
+      newSkipped,
+      getRecentSongIds(),
+    );
     setResults(newResults);
   }
 
   async function handleLike(song: SongWithReason) {
-    console.log('Song liked:', song.title);
-    
-    if (recSessionId) {
-      try {
-        await mongodb.saveFeedback({
-          session_id: userProfile.session_id,
-          song_id: song.id,
-          recommendation_session_id: recSessionId,
-          action: 'liked',
-        });
-        console.log('✅ Like feedback saved to MongoDB');
-      } catch (error) {
-        console.log('⚠️ Could not save like feedback:', error instanceof Error ? error.message : 'Unknown error');
-      }
+    if (!recSessionId) return;
+
+    try {
+      await mongodb.saveFeedback({
+        session_id: userProfile.session_id,
+        song_id: song.id,
+        recommendation_session_id: recSessionId,
+        action: "liked",
+      });
+    } catch (error) {
+      console.log("Like feedback saved locally only:", error);
     }
   }
 
   async function handleSelect(song: SongWithReason) {
     setSelectedSong(song.id);
-    console.log('Song selected:', song.title);
-    
-    if (recSessionId) {
-      try {
-        await mongodb.saveFeedback({
-          session_id: userProfile.session_id,
-          song_id: song.id,
-          recommendation_session_id: recSessionId,
-          action: 'selected',
-        });
-        console.log('✅ Select feedback saved to MongoDB');
-      } catch (error) {
-        console.log('⚠️ Could not save select feedback:', error instanceof Error ? error.message : 'Unknown error');
-      }
+
+    if (!recSessionId) return;
+
+    try {
+      await mongodb.saveFeedback({
+        session_id: userProfile.session_id,
+        song_id: song.id,
+        recommendation_session_id: recSessionId,
+        action: "selected",
+      });
+    } catch (error) {
+      console.log("Select feedback saved locally only:", error);
     }
   }
 
   function handleDownload(song: SongWithReason) {
     try {
-      // Create download link for audio
-      const songNumber = (song.id.charCodeAt(0) % 10) + 1;
-      const audioUrl = `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-${songNumber}.mp3`;
-      
-      // Create temporary link element
-      const link = document.createElement('a');
-      link.href = audioUrl;
+      const link = document.createElement("a");
+      link.href = getPreviewAudioUrl(song);
       link.download = `${song.title} - ${song.artist}.mp3`;
-      link.target = '_blank';
-      
-      // Trigger download
+      link.target = "_blank";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
-      // Show success message
-      console.log(`Download started: ${song.title} - ${song.artist}`);
-      
-      // Optional: Show a toast notification instead of alert
-      const toast = document.createElement('div');
-      toast.textContent = `🎵 Downloading: ${song.title}`;
-      toast.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: var(--success);
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        z-index: 9999;
-        animation: slide-up 0.3s ease;
-      `;
-      document.body.appendChild(toast);
-      
-      // Remove toast after 3 seconds
-      setTimeout(() => {
-        if (document.body.contains(toast)) {
-          document.body.removeChild(toast);
-        }
-      }, 3000);
-      
     } catch (error) {
-      console.error('Download failed:', error);
-      alert('Download failed. Please try again.');
+      console.log("Download failed:", error);
+      alert("Download failed. Please try again.");
     }
   }
 
   function handleSetOnPhoto(song: SongWithReason) {
-    try {
-      // Create a modal-like notification
-      const modal = document.createElement('div');
-      modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.8);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 10000;
-        animation: fade-in 0.3s ease;
-      `;
-      
-      const content = document.createElement('div');
-      content.style.cssText = `
-        background: var(--bg-elevated);
-        padding: 30px;
-        border-radius: 16px;
-        max-width: 400px;
-        text-align: center;
-        border: 1px solid var(--border);
-      `;
-      
-      content.innerHTML = `
-        <h3 style="margin: 0 0 15px 0; color: var(--text-primary); font-size: 18px;">
-          🎵 Set "${song.title}" on Photo
-        </h3>
-        <p style="margin: 0 0 20px 0; color: var(--text-secondary); line-height: 1.5;">
-          This feature would:<br>
-          1. Open your photo gallery<br>
-          2. Let you select a photo<br>
-          3. Create a video with this music<br>
-          4. Ready for Instagram Reels/Stories
-        </p>
-        <p style="margin: 0 0 20px 0; color: var(--warning); font-size: 12px;">
-          Note: This requires native mobile app development for full functionality.
-        </p>
-        <button id="closeModal" style="
-          background: var(--accent);
-          color: white;
-          border: none;
-          padding: 10px 20px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 14px;
-        ">Got it!</button>
-      `;
-      
-      modal.appendChild(content);
-      document.body.appendChild(modal);
-      
-      // Close modal on button click
-      document.getElementById('closeModal')?.addEventListener('click', () => {
-        if (document.body.contains(modal)) {
-          document.body.removeChild(modal);
-        }
-      });
-      
-      // Close modal on background click
-      modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
-          if (document.body.contains(modal)) {
-            document.body.removeChild(modal);
-          }
-        }
-      });
-      
-    } catch (error) {
-      console.error('Set on photo failed:', error);
-      alert('Feature not available in web version.');
-    }
-  }
+    const modal = document.createElement("div");
+    modal.style.cssText = `
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10000;
+      padding: 20px;
+    `;
 
-  function getAIRecommendations() {
-    // Analyze current image and mood
-    const imageDescription = `${imageMood} ${imageScene} ${imageColorTone}`;
-    const caption = userMoodOverride || imageMood;
-    
-    const imageAnalysis = aiAssistant.analyzeImage(imageDescription);
-    const captionAnalysis = aiAssistant.analyzeCaption(caption);
-    const userContext = {
-      location: (userProfile.region?.toLowerCase() === 'india' ? 'india' : 'global') as 'india' | 'global' | 'other',
-      preferences: userProfile.preferred_languages,
-      recentActivity: []
-    };
-    
-    const recommendations = aiAssistant.recommendSongs(imageAnalysis, captionAnalysis, userContext);
-    setAiRecommendations(recommendations);
-    setShowAIRecommendations(true);
-  }
+    const content = document.createElement("div");
+    content.style.cssText = `
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      padding: 24px;
+      border-radius: 16px;
+      max-width: 380px;
+      text-align: center;
+      border: 1px solid var(--border);
+    `;
 
-  function handleImageAnalyzedWithAI(mood: MoodType, scene: SceneType, colorTone: ColorTone, _url: string) {
-    setImageMood(mood);
-    setImageScene(scene);
-    setImageColorTone(colorTone);
-    setHasImage(true);
-    generateRecommendations(songs, mood, scene, colorTone, userMoodOverride, skippedIds);
-    
-    // Also get AI recommendations
-    setTimeout(() => getAIRecommendations(), 1000);
-  }
+    content.innerHTML = `
+      <h3 style="margin-bottom: 12px;">🎵 ${song.title}</h3>
+      <p style="color: var(--text-secondary); margin-bottom: 18px;">
+        हा song तुमच्या story/photo साठी selected आहे. पुढे आपण direct Instagram export feature जोडू शकतो.
+      </p>
+      <button id="closeSongModal" style="background: var(--accent); color: white; border: none; padding: 10px 16px; border-radius: 10px; cursor: pointer;">Got it</button>
+    `;
 
-  function handleRefresh() {
-    generateRecommendations(songs, imageMood, imageScene, imageColorTone, userMoodOverride, skippedIds);
-  }
+    modal.appendChild(content);
+    document.body.appendChild(modal);
 
-  function handleMoodChange(mood: MoodType | '') {
-    console.log('Mood changed to:', mood);
-    console.log('Previous mood override:', userMoodOverride);
-    setUserMoodOverride(mood);
-    if (hasImage) {
-      console.log('Generating recommendations with new mood...');
-      generateRecommendations(songs, imageMood, imageScene, imageColorTone, mood, skippedIds);
-    }
-  }
+    document.getElementById("closeSongModal")?.addEventListener("click", () => {
+      if (document.body.contains(modal)) document.body.removeChild(modal);
+    });
 
-  function handleSceneChange(scene: SceneType) {
-    setImageScene(scene);
-    if (hasImage) {
-      generateRecommendations(songs, imageMood, scene, imageColorTone, userMoodOverride, skippedIds);
-    }
-  }
-
-  function handleColorChange(color: ColorTone) {
-    console.log('Color changed to:', color);
-    setImageColorTone(color);
-    if (hasImage) {
-      console.log('Generating recommendations with new color...');
-      generateRecommendations(songs, imageMood, imageScene, color, userMoodOverride, skippedIds);
-    }
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal && document.body.contains(modal)) {
+        document.body.removeChild(modal);
+      }
+    });
   }
 
   return (
     <div className="rec-view">
-      {/* Top bar */}
       <div className="top-bar">
         <div className="top-logo">
           <span>🎵</span>
           <span>Instam</span>
         </div>
         <div className="top-actions">
-          <button onClick={() => {
-            console.log('Mood panel toggle clicked, current state:', showMoodPanel);
-            setShowMoodPanel(!showMoodPanel);
-          }} className="icon-btn" title="Tune vibes">
+          <button
+            onClick={() => setShowMoodPanel((value) => !value)}
+            className="icon-btn"
+            title="Tune vibes"
+          >
             <Settings size={18} />
           </button>
-          <button onClick={() => {
-            console.log('Edit profile button clicked');
-            onEditProfile();
-          }} className="profile-btn">
-            {userProfile.personality_traits[0] === 'gangster' ? '🥷'
-              : userProfile.personality_traits[0] === 'romantic' ? '💘'
-              : userProfile.personality_traits[0] === 'chill' ? '😎'
-              : userProfile.personality_traits[0] === 'spiritual' ? '🙏'
-              : '🎭'}
-          </button>
-          <button onClick={() => {
-            console.log('AI demo button clicked');
-            window.location.href = '/ai-demo';
-          }} className="profile-btn" title="AI Features Demo">
-            🤖
-          </button>
-          <button onClick={() => {
-            console.log('Smart mood prediction clicked');
-            setShowMoodPrediction(!showMoodPrediction);
-          }} className="profile-btn" title="Smart Mood Prediction">
-            🧠
-          </button>
-          <button onClick={() => {
-            console.log('Music discovery clicked');
-            setShowMusicDiscovery(!showMusicDiscovery);
-            if (!showMusicDiscovery) {
-              generateMusicDiscovery();
-            }
-          }} className="profile-btn" title="Music Discovery">
-            🔍
-          </button>
-          <button onClick={() => {
-            console.log('API status button clicked');
-            window.location.href = '/api-status';
-          }} className="profile-btn" title="API Status Dashboard">
-            📊
-          </button>
-          <button onClick={() => {
-            console.log('Advanced AI button clicked');
-            window.location.href = '/advanced-ai';
-          }} className="profile-btn" title="Advanced AI Features">
-            🤖
+          <button
+            onClick={onEditProfile}
+            className="profile-btn"
+            title="Edit profile"
+          >
+            {primaryTrait === "gangster"
+              ? "🥷"
+              : primaryTrait === "romantic"
+                ? "💘"
+                : primaryTrait === "chill"
+                  ? "😎"
+                  : primaryTrait === "spiritual"
+                    ? "🙏"
+                    : "🎭"}
           </button>
         </div>
       </div>
 
-      {/* Image upload */}
-      <div className="upload-section">
-        <ImageUpload onAnalyzed={handleImageAnalyzedWithAI} />
-        {!hasImage && (
-          <p className="upload-prompt">Upload your photo to get personalized song recommendations</p>
+      <div className="ai-flow-panel">
+        <div className="ai-flow-copy">
+          <span className="ai-flow-kicker">AI Song Match</span>
+          <h1>
+            Photo टाका, mood optional select करा, आणि perfect story song play
+            करा.
+          </h1>
+          <p>
+            AI photo मधला vibe, color, scene आणि तुमची music taste पाहून songs
+            suggest करतो.
+          </p>
+        </div>
+        <div className="ai-flow-steps">
+          <span className={hasImage ? "done" : "active"}>1 Photo</span>
+          <span className={userMoodOverride ? "done" : "active"}>2 Mood</span>
+          <span className={results ? "done" : "active"}>3 Play</span>
+        </div>
+        {hasImage && (
+          <div className="detected-vibe-card">
+            <span>Detected vibe</span>
+            <strong>{userMoodOverride || imageMood}</strong>
+            <small>
+              {imageScene} • {imageColorTone}
+            </small>
+          </div>
         )}
       </div>
 
-      {/* Mood panel */}
+      <div className="upload-section">
+        <ImageUpload onAnalyzed={handleImageAnalyzedWithAI} />
+        {!hasImage && (
+          <p className="upload-prompt">
+            Upload your photo to get personalized song recommendations
+          </p>
+        )}
+      </div>
+
       {showMoodPanel && (
         <MoodSelector
           imageMood={imageMood}
@@ -1080,85 +580,15 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
         />
       )}
 
-      {/* Music Discovery */}
-      {showMusicDiscovery && discoveryResults.length > 0 && (
-        <div className="music-discovery-panel">
-          <div className="discovery-header">
-            <h3>🔍 Music Discovery</h3>
-            <p>Explore new music tailored just for you!</p>
-          </div>
-          
-          <div className="discovery-grid">
-            {discoveryResults.map((discovery, index) => (
-              <div key={index} className="discovery-card">
-                <div className="discovery-icon">
-                  {discovery.type === 'similar_artist' ? '🎤' :
-                   discovery.type === 'new_genre' ? '🎵' :
-                   discovery.type === 'trending' ? '🔥' : '🎭'}
-                </div>
-                <div className="discovery-content">
-                  <h4>{discovery.title}</h4>
-                  <p>{discovery.description}</p>
-                  <div className="discovery-suggestions">
-                    {discovery.suggestions.map((suggestion: string, idx: number) => (
-                      <span key={idx} className="suggestion-tag">{suggestion}</span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Smart Mood Prediction */}
-      {showMoodPrediction && smartMoodPrediction && (
-        <div className="mood-prediction-panel">
-          <div className="mood-prediction-header">
-            <h3>🧠 Smart Mood Prediction</h3>
-            <span className="confidence-badge">
-              {Math.round(smartMoodPrediction.confidence * 100)}% confident
-            </span>
-          </div>
-          
-          <div className="predicted-mood">
-            <div className="mood-emoji">
-              {smartMoodPrediction.predictedMood === 'happy' ? '😄' :
-               smartMoodPrediction.predictedMood === 'energetic' ? '⚡' :
-               smartMoodPrediction.predictedMood === 'romantic' ? '💖' :
-               smartMoodPrediction.predictedMood === 'peaceful' ? '🧘' :
-               smartMoodPrediction.predictedMood === 'confident' ? '💪' :
-               smartMoodPrediction.predictedMood === 'nostalgic' ? '🕰️' :
-               smartMoodPrediction.predictedMood === 'party' ? '🎉' :
-               smartMoodPrediction.predictedMood === 'attitude' ? '😎' : '🎭'}
-            </div>
-            <div className="mood-details">
-              <h4>You're feeling: {smartMoodPrediction.predictedMood}</h4>
-              <div className="mood-reasoning">
-                {smartMoodPrediction.reasoning.map((reason: string, index: number) => (
-                  <p key={index}>• {reason}</p>
-                ))}
-              </div>
-            </div>
-          </div>
-          
-          <div className="mood-suggestions">
-            <h4>🎵 Music Suggestions:</h4>
-            <ul>
-              {smartMoodPrediction.suggestions.map((suggestion: string, index: number) => (
-                <li key={index}>{suggestion}</li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      )}
-
-      {/* Results */}
       {loading && (
         <div className="loading-container">
           <div className="loading-waves">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="wave-bar" style={{ animationDelay: `${i * 0.1}s` }} />
+            {[...Array(5)].map((_, index) => (
+              <div
+                key={index}
+                className="wave-bar"
+                style={{ animationDelay: `${index * 0.1}s` }}
+              />
             ))}
           </div>
           <p className="loading-text">Finding your perfect vibe...</p>
@@ -1171,34 +601,39 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
             <div>
               <h2 className="results-title">Your Songs</h2>
               <p className="results-subtitle">
-                {userProfile.personality_traits[0] ? `Tuned for your ${userProfile.personality_traits[0]} vibe` : 'Personalized for you'}
+                {primaryTrait
+                  ? `Tuned for your ${primaryTrait} vibe`
+                  : "Personalized for you"}
               </p>
             </div>
-            <button onClick={() => {
-            console.log('Refresh button clicked');
-            handleRefresh();
-          }} className="refresh-btn" title="Refresh">
+            <button
+              onClick={handleRefresh}
+              className="refresh-btn"
+              title="Refresh"
+            >
               <RefreshCw size={16} />
             </button>
           </div>
 
-          {/* Highlights row */}
           <div className="highlights-row">
             <div className="highlight-card safe">
               <span className="highlight-label">Safe Choice</span>
               <span className="highlight-song">{results.safeChoice.title}</span>
-              <span className="highlight-artist">{results.safeChoice.artist}</span>
+              <span className="highlight-artist">
+                {results.safeChoice.artist}
+              </span>
             </div>
             <div className="highlight-card unique">
               <span className="highlight-label">Unique Pick</span>
               <span className="highlight-song">{results.uniquePick.title}</span>
-              <span className="highlight-artist">{results.uniquePick.artist}</span>
+              <span className="highlight-artist">
+                {results.uniquePick.artist}
+              </span>
             </div>
           </div>
 
-          {/* Song cards */}
           <div className="songs-list">
-            {results.songs.map(song => (
+            {results.songs.map((song) => (
               <SongCard
                 key={song.id}
                 song={song}
@@ -1215,42 +650,17 @@ export default function RecommendationView({ userProfile, onEditProfile }: Props
           {selectedSong && (
             <div className="selected-banner">
               <span>🎵</span>
-              <span>Song added to your story!</span>
+              <span>Song selected for your story!</span>
             </div>
           )}
         </div>
       )}
 
-      {/* AI Recommendations Section */}
-      {showAIRecommendations && aiRecommendations.length > 0 && (
-        <div className="ai-recommendations">
-          <div className="ai-header">
-            <h3>🤖 AI Smart Recommendations</h3>
-            <button onClick={() => {
-            console.log('Close AI recommendations clicked');
-            setShowAIRecommendations(false);
-          }} className="close-btn">×</button>
-          </div>
-          <div className="ai-songs-list">
-            {aiRecommendations.map((rec, index) => (
-              <div key={index} className="ai-song-card">
-                <div className="ai-song-info">
-                  <div className="ai-song-title">{rec.song}</div>
-                  <div className="ai-song-artist">{rec.artist}</div>
-                  <div className="ai-song-type">{rec.type}</div>
-                </div>
-                <div className="ai-song-reason">{rec.reason}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {!loading && !results && !hasImage && (
         <div className="empty-state">
-          <div className="empty-icon">🎧</div>
+          <div className="empty-icon"></div>
           <p className="empty-title">Drop a photo to start</p>
-          <p className="empty-sub">We'll find songs that match your vibe perfectly</p>
+          <p className="empty-sub">We will find songs that match your vibe.</p>
         </div>
       )}
     </div>

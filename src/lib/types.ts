@@ -1,11 +1,69 @@
-export type Language = 'Hindi' | 'Marathi' | 'English' | 'Punjabi' | 'Telugu' | 'Tamil' | 'Bengali';
-export type PersonalityTrait = 'gangster' | 'romantic' | 'chill' | 'emotional' | 'aesthetic' | 'spiritual' | 'attitude' | 'social';
-export type Genre = 'Pop' | 'Hip-Hop' | 'R&B' | 'Romantic' | 'Folk' | 'Dance' | 'Indie' | 'Motivational' | 'Sad' | 'Spiritual' | 'Mass' | 'Party';
-export type UsageIntent = 'stories' | 'reels' | 'posts';
-export type AgeGroup = 'teen' | 'young-adult' | 'adult' | 'senior';
-export type MoodType = 'happy' | 'sad' | 'attitude' | 'romantic' | 'energetic' | 'peaceful' | 'nostalgic' | 'aggressive' | 'confident' | 'lonely' | 'party';
-export type SceneType = 'selfie' | 'travel' | 'gym' | 'night' | 'party' | 'nature' | 'couple' | 'alone' | 'friends' | 'city' | 'beach' | 'morning' | 'rain';
-export type ColorTone = 'dark' | 'warm' | 'vibrant' | 'moody' | 'neon' | 'golden' | 'cool';
+export type Language =
+  | "Hindi"
+  | "Marathi"
+  | "English"
+  | "Punjabi"
+  | "Telugu"
+  | "Tamil"
+  | "Bengali";
+export type PersonalityTrait =
+  | "gangster"
+  | "romantic"
+  | "chill"
+  | "emotional"
+  | "aesthetic"
+  | "spiritual"
+  | "attitude"
+  | "social";
+export type Genre =
+  | "Pop"
+  | "Hip-Hop"
+  | "R&B"
+  | "Romantic"
+  | "Folk"
+  | "Dance"
+  | "Indie"
+  | "Motivational"
+  | "Sad"
+  | "Spiritual"
+  | "Mass"
+  | "Party";
+export type UsageIntent = "stories" | "reels" | "posts";
+export type AgeGroup = "teen" | "young-adult" | "adult" | "senior";
+export type MoodType =
+  | "happy"
+  | "sad"
+  | "attitude"
+  | "romantic"
+  | "energetic"
+  | "peaceful"
+  | "nostalgic"
+  | "aggressive"
+  | "confident"
+  | "lonely"
+  | "party";
+export type SceneType =
+  | "selfie"
+  | "travel"
+  | "gym"
+  | "night"
+  | "party"
+  | "nature"
+  | "couple"
+  | "alone"
+  | "friends"
+  | "city"
+  | "beach"
+  | "morning"
+  | "rain";
+export type ColorTone =
+  | "dark"
+  | "warm"
+  | "vibrant"
+  | "moody"
+  | "neon"
+  | "golden"
+  | "cool";
 
 export interface UserProfile {
   id?: string;
@@ -40,6 +98,11 @@ export interface Song {
   trend_region: string;
   play_count: number;
   youtube_query: string;
+  preview_url?: string;
+  album_art?: string;
+  duration?: number;
+  album?: string;
+  source?: string;
 }
 
 export interface RecommendationResult {
@@ -51,7 +114,7 @@ export interface RecommendationResult {
 export interface SongWithReason extends Song {
   reason: string;
   matchScore: number;
-  label?: 'safe' | 'unique' | 'trending';
+  label?: "safe" | "unique" | "trending";
 }
 
 export interface RecommendationInput {
@@ -59,12 +122,12 @@ export interface RecommendationInput {
   imageMood: MoodType;
   imageScene: SceneType;
   imageColorTone: ColorTone;
-  userMoodOverride?: MoodType | '';
+  userMoodOverride?: MoodType | "";
 }
 
 export interface FeedbackAction {
   session_id: string;
   song_id: string;
   recommendation_session_id?: string;
-  action: 'liked' | 'skipped' | 'selected';
+  action: "liked" | "skipped" | "selected";
 }
