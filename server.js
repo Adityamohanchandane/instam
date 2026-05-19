@@ -11,22 +11,43 @@ import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import {
+  validateServerEnv,
+  getEnv,
+  getClaudeApiKey,
+} from "./server/env.js";
+import { withRetry } from "./server/retry.js";
+import { analyzeImageMultiProvider } from "./server/image-analysis.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 dotenv.config({ path: join(__dirname, ".env") });
 
-const MONGODB_URI = process.env.MONGODB_URI || process.env.VITE_MONGODB_URI;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.VITE_OPENAI_API_KEY;
-const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY || process.env.VITE_CLAUDE_API_KEY;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || process.env.VITE_SPOTIFY_CLIENT_ID;
-const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || process.env.VITE_SPOTIFY_CLIENT_SECRET;
-const YOUTUBE_CLIENT_ID = process.env.YOUTUBE_CLIENT_ID || process.env.VITE_YOUTUBE_CLIENT_ID;
-const YOUTUBE_CLIENT_SECRET = process.env.YOUTUBE_CLIENT_SECRET || process.env.VITE_YOUTUBE_CLIENT_SECRET;
-const INSTAGRAM_APP_ID = process.env.INSTAGRAM_APP_ID || process.env.VITE_INSTAGRAM_APP_ID;
-const INSTAGRAM_APP_SECRET = process.env.INSTAGRAM_APP_SECRET || process.env.VITE_INSTAGRAM_APP_SECRET;
+const providerStatus = validateServerEnv();
+
+const MONGODB_URI = getEnv("MONGODB_URI");
+const OPENAI_API_KEY = getEnv("OPENAI_API_KEY");
+const CLAUDE_API_KEY = getClaudeApiKey();
+const GEMINI_API_KEY = getEnv("GEMINI_API_KEY");
+const SPOTIFY_CLIENT_ID = getEnv("SPOTIFY_CLIENT_ID");
+const SPOTIFY_CLIENT_SECRET = getEnv("SPOTIFY_CLIENT_SECRET");
+const YOUTUBE_CLIENT_ID = getEnv("YOUTUBE_CLIENT_ID");
+const YOUTUBE_CLIENT_SECRET = getEnv("YOUTUBE_CLIENT_SECRET");
+const INSTAGRAM_APP_ID = getEnv("INSTAGRAM_APP_ID");
+const INSTAGRAM_APP_SECRET = getEnv("INSTAGRAM_APP_SECRET");
+const SPOTIFY_REDIRECT_URI =
+  getEnv("SPOTIFY_REDIRECT_URI") || "http://localhost:5173/auth/spotify/callback";
+const YOUTUBE_REDIRECT_URI =
+  getEnv("YOUTUBE_REDIRECT_URI") || "http://localhost:5173/auth/youtube/callback";
+
+function safeErrorMessage(error) {
+  const status = error?.response?.status;
+  if (status === 401 || status === 403) return "API authentication failed";
+  if (status === 429) return "Rate limit exceeded — try again shortly";
+  if (status >= 500) return "Upstream service error";
+  return error?.message || "Request failed";
+}
 
 // Initialize Express App
 const app = express();
@@ -34,7 +55,7 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(helmet());
-app.use(express.json());
+app.use(express.json({ limit: "12mb" }));
 
 // Rate Limiter
 const limiter = rateLimit({
@@ -60,17 +81,88 @@ if (MONGODB_URI) {
 
 // Health Check Endpoint
 app.get("/api/health", (req, res) => {
-  res.status(200).json({ message: "Server is healthy", timestamp: new Date() });
+  res.status(200).json({
+    message: "Server is healthy",
+    timestamp: new Date(),
+    providers: providerStatus,
+    mongodb: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+  });
 });
 
 // Status Endpoint
 app.get("/api/status", (req, res) => {
   res.status(200).json({
     status: "running",
-    port: 3001,
+    port: Number(process.env.PORT) || 3001,
     timestamp: new Date(),
+    providers: providerStatus,
     mongodb: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
   });
+});
+
+// Deezer search (no API key required)
+app.get("/api/deezer/search", async (req, res) => {
+  try {
+    const query = String(req.query.query || req.query.q || "").trim();
+    const limit = Math.min(Number(req.query.limit) || 20, 50);
+    if (!query) {
+      return res.status(400).json({ error: "query parameter is required" });
+    }
+
+    const response = await withRetry(
+      () =>
+        axios.get("https://api.deezer.com/search/track", {
+          params: { q: query, limit },
+          timeout: 15000,
+        }),
+      { maxRetries: 2 },
+    );
+
+    const tracks = (response.data?.data || []).map((track) => ({
+      id: track.id,
+      title: track.title,
+      artist: { name: track.artist?.name || "Unknown" },
+      album: {
+        title: track.album?.title || "",
+        cover_medium: track.album?.cover_medium || "",
+      },
+      duration: track.duration,
+      preview: track.preview || "",
+      rank: track.rank || 0,
+    }));
+
+    res.status(200).json(tracks);
+  } catch (error) {
+    console.error("Deezer search error:", safeErrorMessage(error));
+    res.status(502).json({ error: safeErrorMessage(error) });
+  }
+});
+
+// Multimodal image analysis (Gemini → OpenAI fallback)
+app.post("/api/analyze-image", async (req, res) => {
+  try {
+    const image = req.body?.image;
+    if (!image || typeof image !== "string") {
+      return res.status(400).json({ error: "image (base64 data URL) is required" });
+    }
+
+    const result = await analyzeImageMultiProvider(image);
+    if (!result) {
+      return res.status(503).json({
+        error: "No AI vision provider configured or analysis failed",
+        providers: { gemini: providerStatus.gemini, openai: providerStatus.openai },
+      });
+    }
+
+    res.status(200).json({
+      analysis: result.analysis,
+      provider: result.provider,
+      timestamp: new Date(),
+    });
+  } catch (error) {
+    console.error("Image analysis error:", safeErrorMessage(error));
+    res.status(500).json({ error: safeErrorMessage(error) });
+  }
 });
 
 // OpenAI Endpoint
@@ -106,8 +198,8 @@ app.post("/api/ai/openai", async (req, res) => {
       timestamp: new Date(),
     });
   } catch (error) {
-    console.error("OpenAI error:", error.message);
-    res.status(500).json({ error: error.message });
+    console.error("OpenAI error:", safeErrorMessage(error));
+    res.status(500).json({ error: safeErrorMessage(error) });
   }
 });
 
@@ -142,8 +234,8 @@ app.post("/api/ai/claude", async (req, res) => {
       timestamp: new Date(),
     });
   } catch (error) {
-    console.error("Claude error:", error.message);
-    res.status(500).json({ error: error.message });
+    console.error("Claude error:", safeErrorMessage(error));
+    res.status(500).json({ error: safeErrorMessage(error) });
   }
 });
 
@@ -153,7 +245,9 @@ app.post("/api/ai/gemini", async (req, res) => {
     if (!GEMINI_API_KEY) {
       return res.status(500).json({ error: "Gemini API key not configured" });
     }
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + GEMINI_API_KEY;
+    const url =
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=" +
+      GEMINI_API_KEY;
     const response = await axios.post(url, {
       contents: [{
         parts: [{
@@ -168,8 +262,8 @@ app.post("/api/ai/gemini", async (req, res) => {
       timestamp: new Date()
     });
   } catch (error) {
-    console.error("Gemini error:", error.message);
-    res.status(500).json({ error: error.message });
+    console.error("Gemini error:", safeErrorMessage(error));
+    res.status(500).json({ error: safeErrorMessage(error) });
   }
 });
 
@@ -179,7 +273,7 @@ app.get("/auth/spotify/login", (req, res) => {
     if (!SPOTIFY_CLIENT_ID) {
       return res.status(500).json({ error: "Spotify client ID not configured" });
     }
-    const redirectUri = encodeURIComponent("http://localhost:5173/auth/spotify/callback");
+    const redirectUri = encodeURIComponent(SPOTIFY_REDIRECT_URI);
     const scope = encodeURIComponent("user-read-private user-read-email");
     const authUrl = "https://accounts.spotify.com/authorize?client_id=" + SPOTIFY_CLIENT_ID + "&response_type=code&redirect_uri=" + redirectUri + "&scope=" + scope;
     res.status(200).json({ auth_url: authUrl, timestamp: new Date() });
@@ -195,7 +289,7 @@ app.get("/auth/youtube/login", (req, res) => {
     if (!YOUTUBE_CLIENT_ID) {
       return res.status(500).json({ error: "YouTube client ID not configured" });
     }
-    const redirectUri = encodeURIComponent("http://localhost:5173/auth/youtube/callback");
+    const redirectUri = encodeURIComponent(YOUTUBE_REDIRECT_URI);
     const scope = encodeURIComponent("https://www.googleapis.com/auth/youtube.readonly");
     const authUrl = "https://accounts.google.com/o/oauth2/v2/auth?client_id=" + YOUTUBE_CLIENT_ID + "&response_type=code&redirect_uri=" + redirectUri + "&scope=" + scope;
     res.status(200).json({ auth_url: authUrl, timestamp: new Date() });

@@ -65,6 +65,8 @@ export interface RecommendationInput {
   userProfile: UserProfile;
   songs: Song[];
   skippedIds: Set<string>;
+  recentSongIds?: Set<string>;
+  imageSeed?: string;
   imageAnalysis?: RealImageAnalysis;
 }
 
@@ -131,7 +133,17 @@ export class AIRecommendationEngine {
   async getRecommendations(input: RecommendationInput): Promise<RecommendationOutput> {
     await this.initialize();
 
-    const { mood, scene, colorTone, userProfile, songs, skippedIds, imageAnalysis } = input;
+    const {
+      mood,
+      scene,
+      colorTone,
+      userProfile,
+      songs,
+      skippedIds,
+      recentSongIds = new Set(),
+      imageSeed = '',
+      imageAnalysis,
+    } = input;
 
     try {
       console.log('🎯 Generating AI-powered recommendations...');
@@ -158,12 +170,27 @@ export class AIRecommendationEngine {
           contextFactors,
           imageAnalysis
         );
+
+        if (recentSongIds.has(song.id)) {
+          recommendation.score *= 0.35;
+          recommendation.reasons.push('Rotating away from recently shown tracks');
+        }
+
+        if (imageSeed) {
+          const seedBias = this.imageSeedBias(song, imageSeed);
+          recommendation.score += seedBias;
+        }
         
         return recommendation;
       });
 
-      // Sort by score
-      scoredSongs.sort((a, b) => b.score - a.score);
+      // Sort by score, with deterministic variety from image seed
+      scoredSongs.sort((a, b) => {
+        if (Math.abs(b.score - a.score) < 0.05 && imageSeed) {
+          return this.hashString(`${imageSeed}:${a.song.id}`) - this.hashString(`${imageSeed}:${b.song.id}`);
+        }
+        return b.score - a.score;
+      });
 
       // Apply diversity filter
       const diverseRecommendations = this.applyDiversityFilter(scoredSongs);
@@ -644,13 +671,27 @@ export class AIRecommendationEngine {
     return Math.min(averageScore + behaviorBoost, 1);
   }
 
+  private hashString(value: string): number {
+    let hash = 0;
+    for (let i = 0; i < value.length; i++) {
+      hash = (hash << 5) - hash + value.charCodeAt(i);
+      hash |= 0;
+    }
+    return Math.abs(hash);
+  }
+
+  private imageSeedBias(song: Song, seed: string): number {
+    const h = this.hashString(`${seed}:${song.id}:${song.genre}`);
+    return ((h % 100) / 100) * 0.12;
+  }
+
   // Apply diversity filter to recommendations (instance method)
   private applyDiversityFilter(recommendations: AIRecommendation[]): AIRecommendation[] {
     const filtered: AIRecommendation[] = [];
     const usedGenres = new Set<string>();
     const usedArtists = new Set<string>();
-    const maxSameGenre = 3;
-    const maxSameArtist = 2;
+    const maxSameGenre = 2;
+    const maxSameArtist = 1;
 
     recommendations.forEach(rec => {
       const genre = rec.song.genre;

@@ -319,8 +319,22 @@ export default function ImageUpload({ onAnalyzed }: Props) {
   const [dragOver, setDragOver] = useState(false);
   const [analysisStep, setAnalysisStep] = useState<string>('');
 
+  const MAX_FILE_BYTES = 10 * 1024 * 1024;
+  const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
   function processFile(file: File) {
-    if (!file.type.startsWith("image/")) return;
+    if (!file.type.startsWith("image/")) {
+      console.warn("Rejected upload: not an image");
+      return;
+    }
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      console.warn("Rejected upload: unsupported format", file.type);
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES) {
+      console.warn("Rejected upload: file too large", file.size);
+      return;
+    }
     setAnalyzing(true);
     setAnalysisStep('Loading image...');
 

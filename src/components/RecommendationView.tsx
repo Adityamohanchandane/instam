@@ -16,6 +16,11 @@ import type {
   RecommendationResult,
 } from "../lib/types";
 import type { RealImageAnalysis } from "../lib/real-image-analyzer";
+import {
+  addRecentSongIds,
+  buildImageRecSeed,
+  getRecentSongIds,
+} from "../lib/rec-session";
 
 interface Props {
   userProfile: UserProfile;
@@ -199,10 +204,18 @@ export default function RecommendationView({
 
         setLoadingMessage('AI is analyzing your preferences...');
         // Use basic recommender
-        const basicRecs = getRecommendations(allResults, input, freshSkipped);
+        const basicRecs = getRecommendations(
+          allResults,
+          input,
+          freshSkipped,
+          getRecentSongIds(),
+        );
         
         setLoadingMessage('Applying advanced AI recommendation engine...');
         // Enhance with AI engine
+        const recentSongIds = getRecentSongIds();
+        const imageSeed = buildImageRecSeed(imageAnalysis || undefined);
+
         const enhancedRecs = await aiEngine.getRecommendations({
           mood: finalMood,
           scene,
@@ -210,7 +223,9 @@ export default function RecommendationView({
           userProfile,
           songs: allResults,
           skippedIds: freshSkipped,
-          imageAnalysis
+          recentSongIds,
+          imageSeed,
+          imageAnalysis: imageAnalysis || undefined,
         });
 
         setLoadingMessage('Finalizing recommendations...');
@@ -234,6 +249,7 @@ export default function RecommendationView({
         };
 
         setResults(finalRecs);
+        addRecentSongIds(finalRecs.songs.map((s) => s.id));
         setShowMoodPanel(true);
 
         try {
@@ -297,13 +313,20 @@ export default function RecommendationView({
   }
 
   function handleRefresh() {
+    const refreshSkipped = new Set(skippedIds);
+    if (results?.songs) {
+      for (const song of results.songs) {
+        refreshSkipped.add(song.id);
+      }
+    }
+    setSkippedIds(refreshSkipped);
     generateSongMatches(
       songs,
       imageMood,
       imageScene,
       imageColorTone,
       userMoodOverride,
-      skippedIds,
+      refreshSkipped,
     );
   }
 
@@ -377,6 +400,7 @@ export default function RecommendationView({
         userMoodOverride,
       },
       newSkipped,
+      getRecentSongIds(),
     );
     setResults(newResults);
   }

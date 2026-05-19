@@ -54,7 +54,36 @@ export interface RealImageAnalysis {
   mood: MoodAnalysis;
   timestamp: number;
   processingTime: number;
-  aiProvider: 'tensorflow' | 'fallback';
+  aiProvider: 'tensorflow' | 'gemini' | 'openai' | 'hybrid' | 'fallback';
+  imageFingerprint?: string;
+}
+
+const ANIMAL_CLASSES = new Set([
+  'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear',
+  'zebra', 'giraffe',
+]);
+
+const API_BASE = import.meta.env.DEV ? 'http://localhost:3001/api' : '/api';
+
+interface ServerImageAnalysis {
+  mood: string;
+  scene_type?: string;
+  scene?: string;
+  color_tone?: string;
+  colorTone?: string;
+  objects?: string[];
+  people_count?: number;
+  animals?: string[];
+  emotions?: string[];
+  environment?: string;
+  lighting?: string;
+  vibe?: string;
+  atmosphere?: string;
+  activity?: string;
+  style?: string;
+  confidence?: number;
+  energy?: number;
+  reasoning?: string[];
 }
 
 export class RealImageAnalyzer {
@@ -111,11 +140,10 @@ export class RealImageAnalyzer {
     }
 
     try {
-      // Run all analyses in parallel where possible
-      const [objectDetection, sceneAnalysis, colorAnalysis] = await Promise.all([
-        this.detectObjects(imageElement),
-        this.analyzeScene(imageElement),
-        this.analyzeColors(imageElement)
+      const objectDetection = await this.detectObjects(imageElement);
+      const [sceneAnalysis, colorAnalysis] = await Promise.all([
+        this.analyzeScene(imageElement, objectDetection),
+        this.analyzeColors(imageElement),
       ]);
 
       // Face analysis (simplified - would need face-api.js for full implementation)
@@ -219,7 +247,10 @@ export class RealImageAnalyzer {
     };
   }
 
-  private async analyzeScene(imageElement: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement): Promise<SceneAnalysis> {
+  private async analyzeScene(
+    imageElement: HTMLImageElement | HTMLVideoElement | HTMLCanvasElement,
+    objects: DetectedObject[] = [],
+  ): Promise<SceneAnalysis> {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
@@ -235,7 +266,7 @@ export class RealImageAnalyzer {
     const colorAnalysis = this.analyzeColorData(imageData);
 
     // Determine scene type based on colors and detected objects
-    const sceneType = this.classifyScene(colorAnalysis);
+    const sceneType = this.classifyScene(colorAnalysis, objects);
     
     // Determine lighting
     const lighting = this.classifyLighting(colorAnalysis.brightness);
@@ -355,8 +386,23 @@ export class RealImageAnalyzer {
     return 'neutral';
   }
 
-  private classifyScene(colorData: { brightness: number; warmth: number; dominantColors: string[] }): SceneType {
+  private classifyScene(
+    colorData: { brightness: number; warmth: number; dominantColors: string[] },
+    objects: DetectedObject[] = [],
+  ): SceneType {
     const { brightness, warmth, dominantColors } = colorData;
+    const classes = objects.map((o) => o.class);
+
+    if (classes.some((c) => ANIMAL_CLASSES.has(c))) {
+      if (classes.includes('person')) return 'friends';
+      return 'nature';
+    }
+    if (classes.includes('car') || classes.includes('bus') || classes.includes('truck')) {
+      return brightness < 0.35 ? 'night' : 'city';
+    }
+    if (classes.filter((c) => c === 'person').length >= 3) return 'party';
+    if (classes.includes('person') && classes.length === 1) return 'selfie';
+    if (classes.includes('surfboard') || classes.includes('kite')) return 'beach';
     
     const hasBlue = dominantColors.some(c => c.includes('blue'));
     const hasWarm = dominantColors.some(c => ['red', 'orange', 'yellow'].includes(c));
@@ -519,6 +565,13 @@ export class RealImageAnalyzer {
 
     // Object-based mood
     const personCount = objects.filter(o => o.class === 'person').length;
+    const animalCount = objects.filter(o => ANIMAL_CLASSES.has(o.class)).length;
+
+    if (animalCount > 0) {
+      moodScores.happy += 0.25;
+      moodScores.peaceful += 0.2;
+      reasoning.push(`Animals detected (${objects.filter(o => ANIMAL_CLASSES.has(o.class)).map(o => o.class).join(', ')}) — playful, calm vibe`);
+    }
     if (personCount > 2) {
       moodScores.party += 0.3;
       moodScores.happy += 0.2;
@@ -527,6 +580,13 @@ export class RealImageAnalyzer {
       moodScores.confident += 0.2;
       moodScores.lonely += 0.1;
       reasoning.push('Single person detected - confident or introspective mood');
+    }
+
+    const vehicleCount = objects.filter(o => ['car', 'bus', 'motorcycle', 'bicycle'].includes(o.class)).length;
+    if (vehicleCount > 0 && scene.type === 'travel') {
+      moodScores.nostalgic += 0.2;
+      moodScores.energetic += 0.15;
+      reasoning.push('Travel/vehicle context — journey energy');
     }
 
     // Find primary and secondary moods
@@ -632,16 +692,131 @@ export class RealImageAnalyzer {
 // Export singleton instance
 export const realImageAnalyzer = new RealImageAnalyzer();
 
+async function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function fetchServerImageAnalysis(
+  imageDataUrl: string,
+): Promise<{ analysis: ServerImageAnalysis; provider: string } | null> {
+  try {
+    const response = await fetch(`${API_BASE}/analyze-image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: imageDataUrl }),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!data?.analysis) return null;
+    return { analysis: data.analysis, provider: data.provider || 'gemini' };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeServerMood(value?: string): MoodType {
+  const mood = value?.toLowerCase().trim() as MoodType;
+  const allowed: MoodType[] = [
+    'happy', 'sad', 'attitude', 'romantic', 'energetic', 'peaceful',
+    'nostalgic', 'aggressive', 'confident', 'lonely', 'party',
+  ];
+  return allowed.includes(mood) ? mood : 'happy';
+}
+
+function mergeServerWithClient(
+  client: RealImageAnalysis,
+  server: ServerImageAnalysis,
+  provider: string,
+): RealImageAnalysis {
+  const serverObjects: DetectedObject[] = (server.objects || []).map((name, i) => ({
+    class: name.toLowerCase(),
+    score: 0.85,
+    bbox: [0, 0, 0, 0] as [number, number, number, number],
+  }));
+
+  const mergedObjects = [...client.objects];
+  for (const obj of serverObjects) {
+    if (!mergedObjects.some((o) => o.class === obj.class)) {
+      mergedObjects.push(obj);
+    }
+  }
+
+  const primaryMood = normalizeServerMood(server.mood);
+  const sceneType = (server.scene_type || server.scene || client.scene.type) as SceneType;
+  const colorTone = (server.color_tone || server.colorTone || client.colors.colorTone) as ColorTone;
+  const serverConfidence = Math.min(Math.max(server.confidence ?? 0.8, 0), 1);
+
+  const reasoning = [
+    ...(server.reasoning || []),
+    ...client.mood.reasoning,
+  ].slice(0, 4);
+
+  return {
+    ...client,
+    objects: mergedObjects,
+    faces: {
+      ...client.faces,
+      detected: (server.people_count ?? 0) > 0 || client.faces.detected,
+      count: Math.max(server.people_count ?? 0, client.faces.count),
+      confidence: Math.max(serverConfidence, client.faces.confidence),
+    },
+    scene: {
+      ...client.scene,
+      type: sceneType,
+      confidence: Math.max(serverConfidence, client.scene.confidence),
+      environment: (server.environment as SceneAnalysis['environment']) || client.scene.environment,
+      lighting: (server.lighting as SceneAnalysis['lighting']) || client.scene.lighting,
+    },
+    colors: {
+      ...client.colors,
+      colorTone,
+    },
+    mood: {
+      primary: primaryMood,
+      secondary: client.mood.secondary,
+      confidence: Math.max(serverConfidence, client.mood.confidence),
+      energy: server.energy ?? client.mood.energy,
+      valence: client.mood.valence,
+      reasoning,
+    },
+    aiProvider: provider === 'openai' ? 'openai' : provider === 'gemini' ? 'gemini' : 'hybrid',
+    imageFingerprint: `${primaryMood}:${sceneType}:${mergedObjects.map(o => o.class).sort().join(',')}`,
+  };
+}
+
 // Helper function for quick analysis from file
 export async function analyzeImageFile(file: File): Promise<RealImageAnalysis> {
+  const dataUrl = await fileToDataUrl(file);
+  const serverResult = await fetchServerImageAnalysis(dataUrl);
+
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = async () => {
       try {
-        const analysis = await realImageAnalyzer.analyzeImage(img);
-        resolve(analysis);
+        const clientAnalysis = await realImageAnalyzer.analyzeImage(img);
+        if (serverResult) {
+          resolve(
+            mergeServerWithClient(
+              clientAnalysis,
+              serverResult.analysis,
+              serverResult.provider,
+            ),
+          );
+        } else {
+          resolve({
+            ...clientAnalysis,
+            imageFingerprint: `tf:${clientAnalysis.mood.primary}:${clientAnalysis.scene.type}`,
+          });
+        }
       } catch (error) {
         reject(error);
+      } finally {
+        URL.revokeObjectURL(img.src);
       }
     };
     img.onerror = reject;

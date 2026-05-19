@@ -158,6 +158,7 @@ export function getRecommendations(
   songs: Song[],
   input: RecommendationInput,
   skippedIds: Set<string>,
+  recentSongIds: Set<string> = new Set(),
 ): RecommendationResult {
   const mood = (input.userMoodOverride || input.imageMood) as MoodType;
   console.log("getRecommendations called with:");
@@ -182,13 +183,17 @@ export function getRecommendations(
     const colorScore = scoreColorTone(song, input.imageColorTone);
     const trendScore = scoreTrending(song, input.userProfile.region || "");
 
-    const matchScore =
+    let matchScore =
       langScore +
       personalityScore +
       moodScore +
       sceneScore +
       colorScore +
       trendScore;
+
+    if (recentSongIds.has(song.id)) {
+      matchScore *= 0.4;
+    }
 
     return {
       ...song,
