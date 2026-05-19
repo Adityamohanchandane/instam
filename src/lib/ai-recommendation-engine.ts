@@ -1,6 +1,9 @@
 // AI-Powered Recommendation Engine
 // Advanced music recommendation using machine learning
 
+import type { MoodType, SceneType, ColorTone, Song, UserProfile, SongWithReason, Genre } from './types';
+import type { RealImageAnalysis } from './real-image-analyzer';
+
 export interface AdvancedMoodAnalysis {
   primaryMood: string;
   confidence: number;
@@ -26,7 +29,7 @@ export interface AdvancedMoodAnalysis {
 }
 
 export interface AIRecommendation {
-  song: any;
+  song: Song;
   score: number;
   reasons: string[];
   aiInsights: string[];
@@ -37,6 +40,8 @@ export interface AIRecommendation {
     energyAlignment: number;
     personalityFit: number;
     contextRelevance: number;
+    artistSimilarity: number;
+    trendingBoost: number;
   };
   confidence: number;
 }
@@ -53,13 +58,42 @@ export interface UserBehaviorData {
   };
 }
 
+export interface RecommendationInput {
+  mood: MoodType;
+  scene: SceneType;
+  colorTone: ColorTone;
+  userProfile: UserProfile;
+  songs: Song[];
+  skippedIds: Set<string>;
+  imageAnalysis?: RealImageAnalysis;
+}
+
+export interface RecommendationOutput {
+  songs: SongWithReason[];
+  safeChoice: SongWithReason;
+  uniquePick: SongWithReason;
+}
+
 export class AIRecommendationEngine {
-  private static userBehaviorHistory: UserBehaviorData[] = [];
-  private static learningModel: any = null;
-  private static isInitialized = false;
+  private userBehaviorHistory: UserBehaviorData[] = [];
+  private learningModel: any = null;
+  private isInitialized = false;
+
+  // Artist similarity database (simplified - in production, use embeddings)
+  private artistSimilarityMap: Map<string, string[]> = new Map([
+    ['Ed Sheeran', ['Justin Bieber', 'Shawn Mendes', 'Charlie Puth', 'Lewis Capaldi']],
+    ['Arijit Singh', ['Atif Aslam', 'Sonu Nigam', 'Pritam', 'Jubin Nautiyal']],
+    ['Badshah', ['Diljit Dosanjh', 'Guru Randhawa', 'Raftaar', 'Honey Singh']],
+    ['Taylor Swift', ['Ariana Grande', 'Selena Gomez', 'Katy Perry', 'Dua Lipa']],
+    ['Drake', ['Travis Scott', 'Post Malone', 'The Weeknd', 'Kendrick Lamar']],
+  ]);
+
+  constructor() {
+    this.initialize();
+  }
 
   // Initialize the AI recommendation engine
-  static async initialize() {
+  async initialize() {
     if (this.isInitialized) return;
 
     try {
@@ -74,11 +108,13 @@ export class AIRecommendationEngine {
       // Initialize simple learning model
       this.learningModel = {
         weights: {
-          moodMatch: 0.3,
-          genrePreference: 0.25,
-          languageMatch: 0.2,
-          energyAlignment: 0.15,
-          personalityFit: 0.1
+          moodMatch: 0.25,
+          genrePreference: 0.2,
+          languageMatch: 0.15,
+          energyAlignment: 0.1,
+          personalityFit: 0.1,
+          artistSimilarity: 0.1,
+          trendingBoost: 0.1
         },
         learningRate: 0.01,
         adaptationThreshold: 10 // Minimum interactions before adaptation
@@ -91,13 +127,12 @@ export class AIRecommendationEngine {
     }
   }
 
-  // Generate personalized recommendations
-  static async generateRecommendations(
-    songs: any[],
-    userProfile: any,
-    currentMood: string,
-    moodAnalysis?: AdvancedMoodAnalysis
-  ): Promise<AIRecommendation[]> {
+  // Main recommendation method (instance method for easier integration)
+  async getRecommendations(input: RecommendationInput): Promise<RecommendationOutput> {
+    await this.initialize();
+
+    const { mood, scene, colorTone, userProfile, songs, skippedIds, imageAnalysis } = input;
+
     try {
       console.log('🎯 Generating AI-powered recommendations...');
 
@@ -107,59 +142,121 @@ export class AIRecommendationEngine {
       // Get contextual factors
       const contextFactors = this.getContextFactors();
 
+      // Filter out skipped songs
+      const availableSongs = songs.filter(s => !skippedIds.has(s.id));
+      const songsToScore = availableSongs.length > 0 ? availableSongs : songs;
+
       // Score each song
-      const scoredSongs = songs.map(song => {
+      const scoredSongs = songsToScore.map(song => {
         const recommendation = this.scoreSong(
           song,
           userProfile,
-          currentMood,
-          moodAnalysis,
+          mood,
+          scene,
+          colorTone,
           behaviorPatterns,
-          contextFactors
+          contextFactors,
+          imageAnalysis
         );
         
         return recommendation;
       });
 
-      // Sort by score and apply diversity filter
-      const diverseRecommendations = this.applyDiversityFilter(
-        scoredSongs.sort((a, b) => b.score - a.score)
-      );
+      // Sort by score
+      scoredSongs.sort((a, b) => b.score - a.score);
 
-      // Update learning model based on this recommendation session
+      // Apply diversity filter
+      const diverseRecommendations = this.applyDiversityFilter(scoredSongs);
+
+      // Convert to SongWithReason format
+      const songsWithReason: SongWithReason[] = diverseRecommendations.slice(0, 8).map(rec => ({
+        ...rec.song,
+        reason: rec.reasons.slice(0, 2).join(' · '),
+        matchScore: rec.score,
+        label: this.calculateLabel(rec, diverseRecommendations)
+      }));
+
+      // Find safe choice (highest score in preferred language)
+      const safeOptions = songsWithReason.filter(s => 
+        userProfile.preferred_languages?.some(l => 
+          s.language.toLowerCase().includes(l.toLowerCase())
+        )
+      );
+      const safeChoice = safeOptions[0] || songsWithReason[0];
+
+      // Find unique pick (good score, different genre from safe choice)
+      const uniqueOptions = songsWithReason.filter(s => 
+        s.id !== safeChoice.id && s.genre !== safeChoice.genre
+      );
+      const uniquePick = uniqueOptions[0] || songsWithReason[1] || songsWithReason[0];
+
+      // Update learning model
       this.updateLearningModel(diverseRecommendations);
 
-      return diverseRecommendations.slice(0, 20); // Return top 20
+      return {
+        songs: songsWithReason,
+        safeChoice: { ...safeChoice, label: 'safe' },
+        uniquePick: { ...uniquePick, label: 'unique' }
+      };
     } catch (error) {
       console.error('❌ AI recommendation generation failed:', error);
-      return this.getFallbackRecommendations(songs, currentMood);
+      return this.getFallbackRecommendations(songs, mood);
     }
   }
 
-  // Score individual song for recommendation
-  private static scoreSong(
-    song: any,
-    userProfile: any,
-    currentMood: string,
-    moodAnalysis?: AdvancedMoodAnalysis,
+  // Calculate label for song
+  private calculateLabel(rec: AIRecommendation, allRecs: AIRecommendation[]): 'safe' | 'unique' | 'trending' | undefined {
+    const song = rec.song;
+    
+    // Trending
+    if (song.is_trending && song.play_count > 1000000000) {
+      return 'trending';
+    }
+    
+    // Safe choice (high confidence, language match)
+    if (rec.personalizedFactors.languageMatch > 0.8 && rec.confidence > 0.7) {
+      return 'safe';
+    }
+    
+    // Unique (different from top picks)
+    const topGenres = allRecs.slice(0, 3).map(r => r.song.genre);
+    if (!topGenres.includes(song.genre)) {
+      return 'unique';
+    }
+    
+    return undefined;
+  }
+
+  // Score individual song for recommendation (instance method)
+  private scoreSong(
+    song: Song,
+    userProfile: UserProfile,
+    mood: MoodType,
+    scene: SceneType,
+    colorTone: ColorTone,
     behaviorPatterns?: any,
-    contextFactors?: any
+    contextFactors?: any,
+    imageAnalysis?: RealImageAnalysis
   ): AIRecommendation {
     // Calculate individual factors
-    const moodMatch = this.calculateMoodMatch(song, currentMood, moodAnalysis);
+    const moodMatch = this.calculateMoodMatch(song, mood, imageAnalysis);
     const genrePreference = this.calculateGenrePreference(song, userProfile, behaviorPatterns);
     const languageMatch = this.calculateLanguageMatch(song, userProfile, behaviorPatterns);
-    const energyAlignment = this.calculateEnergyAlignment(song, currentMood, moodAnalysis);
+    const energyAlignment = this.calculateEnergyAlignment(song, mood, imageAnalysis);
     const personalityFit = this.calculatePersonalityFit(song, userProfile, behaviorPatterns);
-    const contextRelevance = this.calculateContextRelevance(song, contextFactors);
+    const contextRelevance = this.calculateContextRelevance(song, scene, colorTone, contextFactors);
+    const artistSimilarity = this.calculateArtistSimilarity(song, userProfile);
+    const trendingBoost = this.calculateTrendingBoost(song);
 
     // Apply learned weights
     const weights = this.learningModel?.weights || {
-      moodMatch: 0.3,
-      genrePreference: 0.25,
-      languageMatch: 0.2,
-      energyAlignment: 0.15,
-      personalityFit: 0.1
+      moodMatch: 0.25,
+      genrePreference: 0.2,
+      languageMatch: 0.15,
+      energyAlignment: 0.1,
+      personalityFit: 0.1,
+      artistSimilarity: 0.1,
+      trendingBoost: 0.1
     };
 
     const personalizedFactors = {
@@ -168,7 +265,9 @@ export class AIRecommendationEngine {
       languageMatch,
       energyAlignment,
       personalityFit,
-      contextRelevance
+      contextRelevance,
+      artistSimilarity,
+      trendingBoost
     };
 
     // Calculate weighted score
@@ -180,14 +279,16 @@ export class AIRecommendationEngine {
     const reasons = this.generateRecommendationReasons(
       song,
       personalizedFactors,
-      currentMood,
-      userProfile
+      mood,
+      userProfile,
+      scene,
+      colorTone
     );
 
     const aiInsights = this.generateAIInsights(
       song,
       personalizedFactors,
-      moodAnalysis,
+      imageAnalysis,
       behaviorPatterns
     );
 
@@ -204,11 +305,11 @@ export class AIRecommendationEngine {
     };
   }
 
-  // Calculate mood match score
-  private static calculateMoodMatch(
-    song: any,
-    currentMood: string,
-    moodAnalysis?: AdvancedMoodAnalysis
+  // Calculate mood match score (instance method)
+  private calculateMoodMatch(
+    song: Song,
+    currentMood: MoodType,
+    imageAnalysis?: RealImageAnalysis
   ): number {
     let score = 0;
 
@@ -218,36 +319,37 @@ export class AIRecommendationEngine {
     }
 
     // Advanced mood analysis if available
-    if (moodAnalysis) {
-      const emotionScore = moodAnalysis.emotions[currentMood as keyof typeof moodAnalysis.emotions] || 0;
-      score += emotionScore * 0.2;
+    if (imageAnalysis) {
+      const moodConfidence = imageAnalysis.mood.confidence;
+      const energyMatch = Math.abs(imageAnalysis.mood.energy - song.energy_level) < 2 ? 0.2 : 0;
+      score += moodConfidence * 0.2 + energyMatch;
     }
 
     // Energy level alignment
-    const moodEnergyMap: Record<string, number> = {
+    const moodEnergyMap: Record<MoodType, number> = {
       energetic: 8, party: 8, confident: 7, happy: 6,
       romantic: 5, peaceful: 3, nostalgic: 4, sad: 2,
       lonely: 1, aggressive: 8, attitude: 7
     };
 
     const targetEnergy = moodEnergyMap[currentMood] || 5;
-    const songEnergy = song.energy || 5;
+    const songEnergy = song.energy_level || 5;
     const energyDiff = Math.abs(targetEnergy - songEnergy);
     score += Math.max(0, (10 - energyDiff) / 10) * 0.2;
 
     return Math.min(score, 1);
   }
 
-  // Calculate genre preference score
-  private static calculateGenrePreference(
-    song: any,
-    userProfile: any,
+  // Calculate genre preference score (instance method)
+  private calculateGenrePreference(
+    song: Song,
+    userProfile: UserProfile,
     behaviorPatterns?: any
   ): number {
     let score = 0;
 
     // Direct genre preference
-    if (userProfile.favorite_genres?.includes(song.genre)) {
+    if (userProfile.favorite_genres?.includes(song.genre as Genre)) {
       score += 0.8;
     }
 
@@ -260,38 +362,38 @@ export class AIRecommendationEngine {
     return Math.min(score, 1);
   }
 
-  // Calculate language match score
-  private static calculateLanguageMatch(
-    song: any,
-    userProfile: any,
+  // Calculate language match score (instance method)
+  private calculateLanguageMatch(
+    song: Song,
+    userProfile: UserProfile,
     behaviorPatterns?: any
   ): number {
     let score = 0;
 
-    // Direct language preference
-    if (userProfile.preferred_languages?.includes(song.language)) {
-      score += 0.8;
-    }
+    const preferredLanguages = userProfile.preferred_languages || [];
+    if (preferredLanguages.length === 0) return 0.5;
 
-    // Behavior-based language preference
-    if (behaviorPatterns?.preferredLanguages) {
-      const langScore = behaviorPatterns.preferredLanguages[song.language] || 0;
-      score += langScore * 0.2;
+    const songLang = song.language?.toLowerCase() || '';
+    for (let i = 0; i < preferredLanguages.length; i++) {
+      if (songLang.includes(preferredLanguages[i].toLowerCase())) {
+        score += (10 - i * 2) / 10; // First preference gets highest score
+        break;
+      }
     }
 
     return Math.min(score, 1);
   }
 
-  // Calculate energy alignment score
-  private static calculateEnergyAlignment(
-    song: any,
-    currentMood: string,
-    moodAnalysis?: AdvancedMoodAnalysis
+  // Calculate energy alignment score (instance method)
+  private calculateEnergyAlignment(
+    song: Song,
+    currentMood: MoodType,
+    imageAnalysis?: RealImageAnalysis
   ): number {
-    const songEnergy = song.energy || 5;
+    const songEnergy = song.energy_level || 5;
     
     // Base energy alignment with mood
-    const moodEnergyMap: Record<string, number> = {
+    const moodEnergyMap: Record<MoodType, number> = {
       energetic: 8, party: 8, confident: 7, happy: 6,
       romantic: 5, peaceful: 3, nostalgic: 4, sad: 2,
       lonely: 1, aggressive: 8, attitude: 7
@@ -301,18 +403,18 @@ export class AIRecommendationEngine {
     const energyDiff = Math.abs(targetEnergy - songEnergy);
     let score = Math.max(0, (10 - energyDiff) / 10);
 
-    // Adjust based on mood analysis confidence
-    if (moodAnalysis && moodAnalysis.confidence > 0.7) {
+    // Adjust based on image analysis confidence
+    if (imageAnalysis && imageAnalysis.mood.confidence > 0.7) {
       score *= 1.2; // Boost score if mood analysis is confident
     }
 
     return Math.min(score, 1);
   }
 
-  // Calculate personality fit score
-  private static calculatePersonalityFit(
-    song: any,
-    userProfile: any,
+  // Calculate personality fit score (instance method)
+  private calculatePersonalityFit(
+    song: Song,
+    userProfile: UserProfile,
     behaviorPatterns?: any
   ): number {
     let score = 0;
@@ -332,29 +434,116 @@ export class AIRecommendationEngine {
     return Math.min(score, 1);
   }
 
-  // Calculate context relevance score
-  private static calculateContextRelevance(song: any, contextFactors?: any): number {
-    if (!contextFactors) return 0.5;
-
+  // Calculate context relevance score (instance method)
+  private calculateContextRelevance(
+    song: Song,
+    scene: SceneType,
+    colorTone: ColorTone,
+    contextFactors?: any
+  ): number {
     let score = 0.5; // Base score
+
+    // Scene tag match
+    if (song.scene_tags?.includes(scene)) {
+      score += 0.3;
+    }
+
+    // Color tone match
+    if (song.color_tone_tags?.includes(colorTone)) {
+      score += 0.2;
+    }
 
     // Time-based relevance
     const hour = new Date().getHours();
-    if (hour >= 6 && hour < 12 && song.energy > 6) {
-      score += 0.2; // Morning = energetic
-    } else if (hour >= 22 || hour < 6 && song.energy < 4) {
-      score += 0.2; // Night = calm
+    if (hour >= 6 && hour < 12 && song.energy_level > 6) {
+      score += 0.1; // Morning = energetic
+    } else if (hour >= 22 || hour < 6 && song.energy_level < 4) {
+      score += 0.1; // Night = calm
     }
 
     return Math.min(score, 1);
   }
 
-  // Generate recommendation reasons
-  private static generateRecommendationReasons(
-    song: any,
+  // Calculate artist similarity score (new feature)
+  private calculateArtistSimilarity(song: Song, userProfile: UserProfile): number {
+    const favoriteArtists = userProfile.favorite_artists || [];
+    if (favoriteArtists.length === 0) return 0;
+
+    // Direct artist match
+    if (favoriteArtists.includes(song.artist)) {
+      return 1;
+    }
+
+    // Similar artist match
+    for (const favArtist of favoriteArtists) {
+      const similarArtists = this.artistSimilarityMap.get(favArtist) || [];
+      if (similarArtists.includes(song.artist)) {
+        return 0.7;
+      }
+    }
+
+    // Genre-based similarity
+    if (userProfile.favorite_genres?.includes(song.genre as Genre)) {
+      return 0.5;
+    }
+
+    return 0;
+  }
+
+  // Calculate song similarity based on audio features and tags
+  private calculateSongSimilarity(song1: Song, song2: Song): number {
+    let similarity = 0;
+
+    // Genre match
+    if (song1.genre === song2.genre) similarity += 0.3;
+
+    // Mood overlap
+    const moodOverlap = song1.mood_tags.filter(m => song2.mood_tags.includes(m)).length;
+    similarity += (moodOverlap / Math.max(song1.mood_tags.length, song2.mood_tags.length)) * 0.3;
+
+    // Energy similarity
+    const energyDiff = Math.abs(song1.energy_level - song2.energy_level);
+    similarity += Math.max(0, (10 - energyDiff) / 10) * 0.2;
+
+    // Language match
+    if (song1.language === song2.language) similarity += 0.2;
+
+    return similarity;
+  }
+
+  // Find similar songs to a given song
+  findSimilarSongs(targetSong: Song, allSongs: Song[], limit: number = 10): Song[] {
+    const similarities = allSongs
+      .filter(s => s.id !== targetSong.id)
+      .map(song => ({
+        song,
+        similarity: this.calculateSongSimilarity(targetSong, song)
+      }))
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, limit);
+
+    return similarities.map(s => s.song);
+  }
+
+  // Calculate trending boost score (new feature)
+  private calculateTrendingBoost(song: Song): number {
+    if (!song.is_trending) return 0;
+
+    // Boost based on play count
+    if (song.play_count > 1000000000) return 0.8; // 1B+ plays
+    if (song.play_count > 500000000) return 0.6; // 500M+ plays
+    if (song.play_count > 100000000) return 0.4; // 100M+ plays
+    return 0.2;
+  }
+
+  // Generate recommendation reasons (instance method)
+  private generateRecommendationReasons(
+    song: Song,
     factors: any,
-    currentMood: string,
-    userProfile: any
+    currentMood: MoodType,
+    userProfile: UserProfile,
+    scene: SceneType,
+    colorTone: ColorTone
   ): string[] {
     const reasons: string[] = [];
 
@@ -389,17 +578,27 @@ export class AIRecommendationEngine {
 
     // Context-based reasons
     if (factors.contextRelevance > 0.7) {
-      reasons.push(`Perfect for this time of day`);
+      reasons.push(`Perfect for ${scene} moments`);
+    }
+
+    // Artist similarity reasons
+    if (factors.artistSimilarity > 0.7) {
+      reasons.push(`Similar to your favorite artists`);
+    }
+
+    // Trending reasons
+    if (factors.trendingBoost > 0.5) {
+      reasons.push(`Currently trending`);
     }
 
     return reasons.slice(0, 3); // Return top 3 reasons
   }
 
-  // Generate AI insights
-  private static generateAIInsights(
-    song: any,
+  // Generate AI insights (instance method)
+  private generateAIInsights(
+    song: Song,
     factors: any,
-    moodAnalysis?: AdvancedMoodAnalysis,
+    imageAnalysis?: RealImageAnalysis,
     behaviorPatterns?: any
   ): string[] {
     const insights: string[] = [];
@@ -418,8 +617,8 @@ export class AIRecommendationEngine {
       insights.push(`You might discover something new here`);
     }
 
-    // Mood analysis insights
-    if (moodAnalysis && moodAnalysis.confidence > 0.8) {
+    // Image analysis insights
+    if (imageAnalysis && imageAnalysis.mood.confidence > 0.8) {
       insights.push(`AI-detected mood confirms this choice`);
     }
 
@@ -431,8 +630,8 @@ export class AIRecommendationEngine {
     return insights.slice(0, 2); // Return top 2 insights
   }
 
-  // Calculate recommendation confidence
-  private static calculateConfidence(
+  // Calculate recommendation confidence (instance method)
+  private calculateConfidence(
     factors: any,
     behaviorPatterns?: any
   ): number {
@@ -445,8 +644,8 @@ export class AIRecommendationEngine {
     return Math.min(averageScore + behaviorBoost, 1);
   }
 
-  // Apply diversity filter to recommendations
-  private static applyDiversityFilter(recommendations: AIRecommendation[]): AIRecommendation[] {
+  // Apply diversity filter to recommendations (instance method)
+  private applyDiversityFilter(recommendations: AIRecommendation[]): AIRecommendation[] {
     const filtered: AIRecommendation[] = [];
     const usedGenres = new Set<string>();
     const usedArtists = new Set<string>();
@@ -471,8 +670,8 @@ export class AIRecommendationEngine {
     return filtered;
   }
 
-  // Analyze user behavior patterns
-  private static analyzeUserBehavior(): any {
+  // Analyze user behavior patterns (instance method)
+  private analyzeUserBehavior(): any {
     if (this.userBehaviorHistory.length === 0) {
       return null;
     }
@@ -488,58 +687,53 @@ export class AIRecommendationEngine {
     const recentInteractions = this.userBehaviorHistory.slice(-50);
 
     recentInteractions.forEach(interaction => {
-      // Genre preferences
-      if (interaction.songId) {
-        // This would need to be expanded to fetch song details
-        // For now, we'll use placeholder logic
-      }
+      // This would need song data to analyze properly
+      // For now, return null as placeholder
     });
 
     return patterns;
   }
 
-  // Get context factors
-  private static getContextFactors(): any {
-    const now = new Date();
-    const hour = now.getHours();
-    const dayOfWeek = now.getDay();
-
+  // Get contextual factors (instance method)
+  private getContextFactors(): any {
+    const hour = new Date().getHours();
     return {
       timeOfDay: hour,
-      dayOfWeek,
-      isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
-      season: Math.floor(now.getMonth() / 3) // 0: Winter, 1: Spring, etc.
+      isMorning: hour >= 6 && hour < 12,
+      isAfternoon: hour >= 12 && hour < 18,
+      isEvening: hour >= 18 && hour < 22,
+      isNight: hour >= 22 || hour < 6
     };
   }
 
-  // Update learning model
-  private static updateLearningModel(recommendations: AIRecommendation[]): void {
-    // This would implement reinforcement learning
-    // For now, it's a placeholder for future enhancement
-    console.log('📚 Updating learning model with new recommendations...');
+  // Update learning model (instance method)
+  private updateLearningModel(recommendations: AIRecommendation[]): void {
+    // Placeholder for learning model updates
+    // In production, this would adjust weights based on user feedback
   }
 
-  // Get fallback recommendations
-  private static getFallbackRecommendations(songs: any[], currentMood: string): AIRecommendation[] {
-    return songs.slice(0, 20).map(song => ({
-      song,
-      score: Math.random(),
-      reasons: ['Basic recommendation'],
-      aiInsights: ['AI features temporarily unavailable'],
-      personalizedFactors: {
-        moodMatch: 0.5,
-        genrePreference: 0.5,
-        languageMatch: 0.5,
-        energyAlignment: 0.5,
-        personalityFit: 0.5,
-        contextRelevance: 0.5
-      },
-      confidence: 0.3
+  // Get fallback recommendations (instance method)
+  private getFallbackRecommendations(songs: Song[], mood: MoodType): RecommendationOutput {
+    // Simple fallback based on mood tags
+    const moodMatches = songs.filter(s => s.mood_tags?.includes(mood));
+    const fallbackSongs = moodMatches.length > 0 ? moodMatches : songs.slice(0, 8);
+
+    const songsWithReason: SongWithReason[] = fallbackSongs.slice(0, 8).map(song => ({
+      ...song,
+      reason: `Matches ${mood} mood`,
+      matchScore: 0.5,
+      label: undefined
     }));
+
+    return {
+      songs: songsWithReason,
+      safeChoice: songsWithReason[0],
+      uniquePick: songsWithReason[1] || songsWithReason[0]
+    };
   }
 
-  // Record user behavior
-  static recordBehavior(behavior: UserBehaviorData): void {
+  // Record user behavior (static method for convenience)
+  recordBehavior(behavior: UserBehaviorData): void {
     this.userBehaviorHistory.push(behavior);
     
     // Keep only last 1000 interactions
@@ -552,7 +746,7 @@ export class AIRecommendationEngine {
   }
 
   // Get user behavior insights
-  static getUserInsights(): {
+  getUserInsights(): {
     totalInteractions: number;
     favoriteGenres: string[];
     favoriteMoods: string[];
@@ -573,14 +767,11 @@ export class AIRecommendationEngine {
   }
 
   // Clear user behavior data
-  static clearBehaviorData(): void {
+  clearBehaviorData(): void {
     this.userBehaviorHistory = [];
     localStorage.removeItem('instam_user_behavior');
   }
 }
-
-// Initialize on import
-AIRecommendationEngine.initialize().catch(console.error);
 
 // Advanced human-like mood prediction
 export class HumanLikeMoodPredictor {
