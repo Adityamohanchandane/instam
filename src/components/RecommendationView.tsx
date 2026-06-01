@@ -3,6 +3,7 @@ import { RefreshCw, Settings } from "lucide-react";
 import { getRecommendations } from "../lib/recommender";
 import { AIRecommendationEngine } from "../lib/ai-recommendation-engine";
 import { mongodb } from "../lib/mongodb";
+import { fetchSpotifyRecommendations } from "../lib/spotify-client";
 import SongCard from "./SongCard";
 import MoodSelector from "./MoodSelector";
 import ImageUpload from "./ImageUpload";
@@ -20,6 +21,7 @@ import {
   addRecentSongIds,
   buildImageRecSeed,
   getRecentSongIds,
+  addSkippedSong,
 } from "../lib/rec-session";
 
 interface Props {
@@ -168,6 +170,54 @@ export default function RecommendationView({
         const finalMood = (userMood || mood) as MoodType;
         console.log("🎵 Generating song matches for mood:", finalMood);
 
+        const recentSongIds = getRecentSongIds();
+        const imageSeed = buildImageRecSeed(imageAnalysis || undefined);
+
+        setLoadingMessage('Connecting to Spotify AI recommendations...');
+        
+        // Try Spotify API first
+        const spotifyRecs = await fetchSpotifyRecommendations({
+          mood: finalMood,
+          scene,
+          colorTone,
+          userProfile,
+          imageAnalysis: imageAnalysis || undefined,
+          recentSongIds: Array.from(recentSongIds),
+          skippedIds: Array.from(freshSkipped),
+          imageSeed,
+          session_id: userProfile.session_id,
+          limit: 12,
+        });
+
+        if (spotifyRecs && spotifyRecs.songs.length > 0) {
+          console.log("✅ Spotify recommendations successful:", spotifyRecs.songs.length);
+          setLoadingMessage('Spotify recommendations loaded!');
+          setResults(spotifyRecs);
+          addRecentSongIds(spotifyRecs.songs.map((s) => s.id));
+          setShowMoodPanel(true);
+
+          try {
+            const sessionId = await mongodb.saveSession({
+              session_id: userProfile.session_id,
+              image_mood: mood,
+              image_scene: scene,
+              image_color_tone: colorTone,
+              user_mood_override: userMood,
+              recommended_song_ids: spotifyRecs.songs.map((song) => song.id),
+              safe_choice_id: spotifyRecs.safeChoice.id,
+              unique_pick_id: spotifyRecs.uniquePick.id,
+            });
+            if (sessionId) setRecSessionId(sessionId);
+          } catch (error) {
+            console.log("Recommendation session saved locally only:", error);
+          }
+          return;
+        }
+
+        console.log("⚠️ Spotify API unavailable, falling back to local database");
+        setLoadingMessage('Using local song database...');
+
+        // Fallback to MongoDB
         const queries = buildSearchQueries(finalMood, scene, colorTone);
         console.log("🔍 Search queries:", queries);
 
@@ -175,7 +225,6 @@ export default function RecommendationView({
         const seenIds = new Set<string>();
 
         const preferredLanguage = userProfile.preferred_languages?.[0] || "Hindi";
-        setLoadingMessage('Fetching songs from music database...');
         for (const q of queries) {
           if (allResults.length >= 30) break;
           const results = await mongodb.searchSongs(q, preferredLanguage, 10);
@@ -189,7 +238,6 @@ export default function RecommendationView({
 
         if (allResults.length === 0) {
           console.log("⚠️ No songs found from search, using local songs");
-          setLoadingMessage('Loading local song library...');
           const localSongs = await mongodb.getSongs(20);
           allResults.push(...localSongs);
         }
@@ -203,19 +251,14 @@ export default function RecommendationView({
         };
 
         setLoadingMessage('AI is analyzing your preferences...');
-        // Use basic recommender
         const basicRecs = getRecommendations(
           allResults,
           input,
           freshSkipped,
-          getRecentSongIds(),
+          recentSongIds,
         );
         
         setLoadingMessage('Applying advanced AI recommendation engine...');
-        // Enhance with AI engine
-        const recentSongIds = getRecentSongIds();
-        const imageSeed = buildImageRecSeed(imageAnalysis || undefined);
-
         const enhancedRecs = await aiEngine.getRecommendations({
           mood: finalMood,
           scene,
@@ -229,7 +272,6 @@ export default function RecommendationView({
         });
 
         setLoadingMessage('Finalizing recommendations...');
-        // Merge results
         const mergedSongs: SongWithReason[] = basicRecs.songs.map(song => {
           const enhanced = enhancedRecs.songs.find(s => s.id === song.id);
           return {
@@ -376,6 +418,9 @@ export default function RecommendationView({
     const newSkipped = new Set(skippedIds);
     newSkipped.add(song.id);
     setSkippedIds(newSkipped);
+
+    // Track skip timestamp for time-decay
+    addSkippedSong(song.id);
 
     if (recSessionId) {
       try {
