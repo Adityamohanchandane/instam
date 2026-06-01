@@ -7,6 +7,13 @@ import type {
   SceneType,
   ColorTone,
 } from "./types";
+import {
+  getRecentSongIds,
+  getSkipPenalty,
+  getRecentSongPenalty,
+  addRecentSongWithTimestamp,
+  clearExpiredSkippedSongs,
+} from "./rec-session";
 
 // Mood compatibility map — which moods pair well together
 const MOOD_COMPAT: Record<string, string[]> = {
@@ -161,13 +168,14 @@ export function getRecommendations(
   recentSongIds: Set<string> = new Set(),
 ): RecommendationResult {
   const mood = (input.userMoodOverride || input.imageMood) as MoodType;
-  console.log("getRecommendations called with:");
-  console.log("- imageMood:", input.imageMood);
-  console.log("- userMoodOverride:", input.userMoodOverride);
-  console.log("- final mood used:", mood);
+  clearExpiredSkippedSongs();
 
   const availableSongs = songs.filter((s) => !skippedIds.has(s.id));
   const sourceSongs = availableSongs.length > 0 ? availableSongs : songs;
+
+  // Track artist and genre usage for diversity
+  const artistCount = new Map<string, number>();
+  const genreCount = new Map<string, number>();
 
   const scored: SongWithReason[] = sourceSongs.map((song) => {
     const langScore = scoreLanguage(
@@ -191,20 +199,52 @@ export function getRecommendations(
       colorScore +
       trendScore;
 
+    // Apply time-decay penalties for recent songs
     if (recentSongIds.has(song.id)) {
-      matchScore *= 0.4;
+      const recentPenalty = getRecentSongPenalty(song.id);
+      matchScore *= (1 - recentPenalty);
     }
+
+    // Apply skip penalties with decay
+    const skipPenalty = getSkipPenalty(song.id);
+    if (skipPenalty > 0) {
+      matchScore *= (1 - skipPenalty);
+    }
+
+    // Add confidence based on scoring
+    const baseConfidence = Math.min(0.99, Math.max(0.60, matchScore / 50));
+    const confidencePercent = Math.round(baseConfidence * 100);
 
     return {
       ...song,
       reason: buildReason(song, input),
       matchScore,
+      confidencePercent,
     };
   });
 
   scored.sort((a, b) => b.matchScore - a.matchScore);
 
-  const top = scored.slice(0, 8);
+  // Apply diversity filtering: limit artists and genres
+  const diverse: SongWithReason[] = [];
+  for (const song of scored) {
+    const artistKey = song.artist.toLowerCase();
+    const genreKey = song.genre;
+
+    const artistUses = artistCount.get(artistKey) || 0;
+    const genreUses = genreCount.get(genreKey) || 0;
+
+    // Max 2 songs per artist, 3 per genre
+    if (artistUses >= 2 || genreUses >= 3) continue;
+
+    diverse.push(song);
+    artistCount.set(artistKey, artistUses + 1);
+    genreCount.set(genreKey, genreUses + 1);
+
+    if (diverse.length >= 8) break;
+  }
+
+  const top = diverse.length > 0 ? diverse : scored.slice(0, 8);
 
   // Safe choice: highest scored in preferred language
   const safeOptions = top.filter((s) =>
@@ -238,6 +278,9 @@ export function getRecommendations(
             ? "trending"
             : undefined,
   })) as SongWithReason[];
+
+  // Track recent songs for next time
+  results.forEach(s => addRecentSongWithTimestamp(s.id));
 
   return { songs: results, safeChoice, uniquePick };
 }

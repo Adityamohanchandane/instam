@@ -168,9 +168,7 @@ export default function SongCard({
             setIsPlaying(true);
             setIsCurrentPlaying(true);
           })
-          .catch((error) => {
-            console.error("Audio play failed:", error);
-            // Handle autoplay policy - show user message
+          .catch(() => {
             alert(
               "Audio playback requires user interaction. Please click again to play.",
             );
@@ -228,7 +226,7 @@ export default function SongCard({
         }}
       />
 
-      {/* Labels */}
+      {/* Labels & Confidence */}
       <div className="card-labels">
         {song.label === "safe" && (
           <span className="label safe">
@@ -243,6 +241,13 @@ export default function SongCard({
         {song.label === "trending" && (
           <span className="label trending">
             <TrendingUp size={10} /> Trending
+          </span>
+        )}
+        {song.confidencePercent && (
+          <span className="label confidence" style={{
+            backgroundColor: song.confidencePercent >= 85 ? '#10b981' : song.confidencePercent >= 70 ? '#f59e0b' : '#ef4444'
+          }}>
+            {song.confidencePercent}% match
           </span>
         )}
       </div>
@@ -282,7 +287,6 @@ export default function SongCard({
               className="mode-badge"
               onClick={(e) => {
                 e.stopPropagation();
-                console.log("Play mode toggled for:", song.title);
                 togglePlayMode();
               }}
             >
@@ -317,7 +321,6 @@ export default function SongCard({
       <div className="card-actions">
         <button
           onClick={() => {
-            console.log("Skip button clicked for:", song.title);
             handleSkip();
           }}
           className="action-btn skip"
@@ -327,12 +330,6 @@ export default function SongCard({
         </button>
         <button
           onClick={() => {
-            console.log(
-              "Like button clicked for:",
-              song.title,
-              "Current liked:",
-              liked,
-            );
             handleLike();
           }}
           className={`action-btn like ${liked ? "active" : ""}`}
@@ -342,12 +339,6 @@ export default function SongCard({
         </button>
         <button
           onClick={() => {
-            console.log(
-              "Select button clicked for:",
-              song.title,
-              "Current selected:",
-              isSelected,
-            );
             onSelect();
           }}
           className={`action-btn select ${isSelected ? "active" : ""}`}
@@ -380,7 +371,6 @@ export default function SongCard({
         </a>
         <button
           onClick={() => {
-            console.log("Download button clicked for:", song.title);
             handleDownload();
           }}
           className="action-btn download"
@@ -391,7 +381,6 @@ export default function SongCard({
         </button>
         <button
           onClick={() => {
-            console.log("Set on photo button clicked for:", song.title);
             handleSetOnPhoto();
           }}
           className="action-btn set-on-photo"

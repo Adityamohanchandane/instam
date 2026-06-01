@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: instam
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run server
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NPM_CONFIG_LEGACY_PEER_DEPS
+        value: "true"
+    routes:
+      - path: /
+        dest: dist/index.html

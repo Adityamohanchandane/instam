@@ -18,6 +18,7 @@ import {
 } from "./server/env.js";
 import { withRetry } from "./server/retry.js";
 import { analyzeImageMultiProvider } from "./server/image-analysis.js";
+import spotifyRouter from "./server/spotify-routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -64,6 +65,13 @@ const limiter = rateLimit({
 });
 
 app.use(limiter);
+
+app.use("/api/spotify", spotifyRouter);
+
+// Legacy auth paths → Spotify API routes
+app.get("/auth/spotify/login", (req, res) => {
+  res.redirect(307, `/api/spotify/login?${new URLSearchParams(req.query).toString()}`);
+});
 
 // MongoDB Connection (optional)
 if (MONGODB_URI) {
@@ -264,22 +272,6 @@ app.post("/api/ai/gemini", async (req, res) => {
   } catch (error) {
     console.error("Gemini error:", safeErrorMessage(error));
     res.status(500).json({ error: safeErrorMessage(error) });
-  }
-});
-
-// Spotify OAuth Login Endpoint
-app.get("/auth/spotify/login", (req, res) => {
-  try {
-    if (!SPOTIFY_CLIENT_ID) {
-      return res.status(500).json({ error: "Spotify client ID not configured" });
-    }
-    const redirectUri = encodeURIComponent(SPOTIFY_REDIRECT_URI);
-    const scope = encodeURIComponent("user-read-private user-read-email");
-    const authUrl = "https://accounts.spotify.com/authorize?client_id=" + SPOTIFY_CLIENT_ID + "&response_type=code&redirect_uri=" + redirectUri + "&scope=" + scope;
-    res.status(200).json({ auth_url: authUrl, timestamp: new Date() });
-  } catch (error) {
-    console.error("Spotify login error:", error.message);
-    res.status(500).json({ error: error.message });
   }
 });
 
