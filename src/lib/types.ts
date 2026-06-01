@@ -103,6 +103,8 @@ export interface Song {
   duration?: number;
   album?: string;
   source?: string;
+  spotify_id?: string;
+  spotify_url?: string;
 }
 
 export interface RecommendationResult {
@@ -115,6 +117,13 @@ export interface SongWithReason extends Song {
   reason: string;
   matchScore: number;
   label?: "safe" | "unique" | "trending";
+  confidencePercent?: number;
+  audio_features?: {
+    tempo?: number;
+    energy?: number;
+    valence?: number;
+    danceability?: number;
+  };
 }
 
 export interface RecommendationInput {
